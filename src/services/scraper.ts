@@ -572,8 +572,8 @@ let scraperInstance: AlkoScraper | null = null;
 
 /**
  * Shared scraper instance for the current CLI invocation. We intentionally
- * keep a singleton so multiple consumers (e.g. `availability` now, and
- * `show --enrich` later in Vaihe 6) can reuse the same browser.
+ * keep a singleton so multiple consumers (e.g. `availability` and `show
+ * --enrich`) can reuse the same browser within one CLI run.
  */
 export function getAlkoScraper(): AlkoScraper {
   if (!scraperInstance) scraperInstance = new AlkoScraper();
