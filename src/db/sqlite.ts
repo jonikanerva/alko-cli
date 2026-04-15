@@ -267,6 +267,50 @@ export class SqliteService {
   }
 
   /**
+   * Remove products whose IDs are not in `keepIds`. Returns the deletion
+   * count. Intended for full catalog syncs — callers MUST NOT invoke this
+   * after a partial (`--limit`) sync or every run would delete the whole
+   * tail of the catalog.
+   */
+  deleteProductsNotIn(keepIds: Set<string>): number {
+    if (keepIds.size === 0) return 0;
+    const allIds = this.db.prepare('SELECT id FROM products').all() as { id: string }[];
+    const doomed = allIds.filter((row) => !keepIds.has(row.id));
+    if (doomed.length === 0) return 0;
+    const stmt = this.db.prepare('DELETE FROM products WHERE id = ?');
+    this.db.exec('BEGIN');
+    try {
+      for (const { id } of doomed) stmt.run(id);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+    return doomed.length;
+  }
+
+  /**
+   * Remove stores whose IDs are not in `keepIds`. Same contract as
+   * {@link deleteProductsNotIn}: full-sync callers only.
+   */
+  deleteStoresNotIn(keepIds: Set<string>): number {
+    if (keepIds.size === 0) return 0;
+    const allIds = this.db.prepare('SELECT id FROM stores').all() as { id: string }[];
+    const doomed = allIds.filter((row) => !keepIds.has(row.id));
+    if (doomed.length === 0) return 0;
+    const stmt = this.db.prepare('DELETE FROM stores WHERE id = ?');
+    this.db.exec('BEGIN');
+    try {
+      for (const { id } of doomed) stmt.run(id);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+    return doomed.length;
+  }
+
+  /**
    * Patch an existing product's enriched fields (tasteProfile, foodPairings, etc.).
    */
   updateProductEnrichment(

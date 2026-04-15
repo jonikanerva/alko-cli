@@ -80,8 +80,8 @@ export function registerUpdateCommand(program: Command): void {
         } else {
           const partialNote = isFullSync ? '' : ' (partial — --limit set, staleness clock not reset)';
           process.stderr.write(
-            `Updated products: ${products.productsAdded} added, ${products.productsUpdated} updated, ${products.invalidCount} invalid.\n` +
-              `Updated stores:   ${stores.storesAdded} added, ${stores.storesUpdated} updated, ${stores.invalidCount} invalid.\n` +
+            `Updated products: ${products.productsAdded} added, ${products.productsUpdated} updated, ${products.productsRemoved} removed, ${products.invalidCount} invalid.\n` +
+              `Updated stores:   ${stores.storesAdded} added, ${stores.storesUpdated} updated, ${stores.storesRemoved} removed, ${stores.invalidCount} invalid.\n` +
               `Total: ${products.durationMs}ms${partialNote}.\n`
           );
         }

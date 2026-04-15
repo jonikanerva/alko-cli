@@ -7,6 +7,7 @@ export interface StoreSyncResult {
   storesProcessed: number;
   storesAdded: number;
   storesUpdated: number;
+  storesRemoved: number;
   invalidCount: number;
 }
 
@@ -34,10 +35,18 @@ export async function syncStores(
   logger.info(`Upserting ${valid.length} stores to SQLite`);
   const { added, updated } = db.upsertStores(valid);
 
+  // The stores endpoint always returns the full directory; if a store is
+  // gone from the API response, it has closed and should leave the local
+  // catalog too.
+  const keepIds = new Set(valid.map((s) => s.id));
+  const removed = db.deleteStoresNotIn(keepIds);
+  if (removed > 0) logger.info(`Removed ${removed} stores no longer in directory`);
+
   return {
     storesProcessed: valid.length,
     storesAdded: added,
     storesUpdated: updated,
+    storesRemoved: removed,
     invalidCount,
   };
 }

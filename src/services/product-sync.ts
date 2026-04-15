@@ -8,6 +8,7 @@ export interface SyncResult {
   productsProcessed: number;
   productsAdded: number;
   productsUpdated: number;
+  productsRemoved: number;
   invalidCount: number;
   errors: string[];
   source: 'api';
@@ -64,6 +65,16 @@ export async function syncProducts(
   logger.info(`Upserting ${valid.length} products to SQLite`);
   const { added, updated } = db.upsertProducts(valid);
 
+  // Mirror-delete products the API no longer advertises — but only on a
+  // full sync. A --limit run would otherwise delete most of the catalog.
+  let removed = 0;
+  const isFullSync = opts.limit === undefined;
+  if (isFullSync) {
+    const keepIds = new Set(valid.map((p) => p.id));
+    removed = db.deleteProductsNotIn(keepIds);
+    if (removed > 0) logger.info(`Removed ${removed} products no longer in catalog`);
+  }
+
   // Deliberately NOT writing last_sync / last_sync_source /
   // last_sync_product_count here — the update command is responsible
   // for stamping those only after BOTH product and store syncs have
@@ -76,6 +87,7 @@ export async function syncProducts(
     productsProcessed: valid.length,
     productsAdded: added,
     productsUpdated: updated,
+    productsRemoved: removed,
     invalidCount,
     errors,
     source: 'api',
@@ -83,7 +95,7 @@ export async function syncProducts(
   };
 
   logger.info(
-    `Sync done: ${added} added, ${updated} updated, ${invalidCount} invalid (${result.durationMs}ms)`
+    `Sync done: ${added} added, ${updated} updated, ${removed} removed, ${invalidCount} invalid (${result.durationMs}ms)`
   );
 
   return result;
