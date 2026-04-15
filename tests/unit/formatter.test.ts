@@ -114,7 +114,7 @@ describe('formatProductsTable', () => {
     };
     const out = formatProductsTable(result);
     expect(out).toContain('ID');
-    expect(out).toContain('Nimi');
+    expect(out).toContain('Name');
     expect(out).toContain('Test Wine');
     expect(out).toContain('Another Wine');
     expect(out).toMatch(/2 shown · 5 matches \(use --limit to change\)\n$/);

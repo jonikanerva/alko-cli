@@ -78,11 +78,11 @@ export function formatProductsTable(result: ProductSearchResult): string {
     '  ' +
     [
       padRight('ID', widths.id),
-      padRight('Nimi', widths.name),
-      padRight('Tyyppi', widths.type),
-      padRight('Maa', widths.country),
-      padLeft('Hinta', widths.price),
-      padLeft('Alk%', widths.alc),
+      padRight('Name', widths.name),
+      padRight('Type', widths.type),
+      padRight('Country', widths.country),
+      padLeft('Price', widths.price),
+      padLeft('ABV%', widths.alc),
     ].join('  ');
   const sep =
     '  ' +
@@ -132,37 +132,37 @@ export function formatProductDetail(p: Product): string {
   };
 
   add('ID', p.id);
-  add('Nimi', p.name);
-  add('Valmistaja', p.producer);
-  add('Tyyppi', p.type);
-  add('Alatyyppi', p.subtype);
-  add('Oluttyyppi', p.beerType);
-  add('Maa', p.country);
-  add('Alue', p.region);
-  add('Vuosikerta', p.vintage);
-  add('Rypäleet', p.grapes);
-  add('Hinta', euro(p.price));
-  add('Litrahinta', euro(p.pricePerLiter));
-  add('Pullokoko', p.bottleSize);
-  add('Pakkaustyyppi', p.packagingType);
-  add('Suljentatyyppi', p.closureType);
-  add('Alkoholi-%', alcPct(p.alcoholPercentage));
-  add('Hapot g/l', p.acids);
-  add('Sokeri g/l', p.sugar);
-  add('Energia', p.energy);
-  add('Savuisuus', p.smokiness !== null ? `${p.smokiness} (${p.smokinessLabel ?? ''})` : null);
-  add('Erityisryhmä', p.specialGroup);
-  add('Valikoima', p.assortment);
-  add('Uutuus', p.isNew ? 'kyllä' : null);
+  add('Name', p.name);
+  add('Producer', p.producer);
+  add('Type', p.type);
+  add('Subtype', p.subtype);
+  add('Beer type', p.beerType);
+  add('Country', p.country);
+  add('Region', p.region);
+  add('Vintage', p.vintage);
+  add('Grapes', p.grapes);
+  add('Price', euro(p.price));
+  add('Price/L', euro(p.pricePerLiter));
+  add('Bottle size', p.bottleSize);
+  add('Packaging', p.packagingType);
+  add('Closure', p.closureType);
+  add('ABV%', alcPct(p.alcoholPercentage));
+  add('Acids g/L', p.acids);
+  add('Sugar g/L', p.sugar);
+  add('Energy', p.energy);
+  add('Smokiness', p.smokiness !== null ? `${p.smokiness} (${p.smokinessLabel ?? ''})` : null);
+  add('Special group', p.specialGroup);
+  add('Assortment', p.assortment);
+  add('New', p.isNew ? 'yes' : null);
   add('EAN', p.ean);
-  add('Luonnehdinta', p.description);
-  add('Huomautus', p.notes);
-  add('Makuprofiili', p.tasteProfile);
-  add('Käyttövinkit', p.usageTips);
-  add('Tarjoilu', p.servingSuggestion);
-  add('Ruokapari', p.foodPairings);
-  add('Sertifikaatit', p.certificates);
-  add('Ainesosat', p.ingredients);
+  add('Description', p.description);
+  add('Notes', p.notes);
+  add('Taste profile', p.tasteProfile);
+  add('Usage tips', p.usageTips);
+  add('Serving', p.servingSuggestion);
+  add('Food pairings', p.foodPairings);
+  add('Certificates', p.certificates);
+  add('Ingredients', p.ingredients);
   add('Updated', p.updatedAt);
 
   return lines.join('\n') + '\n';
@@ -194,10 +194,10 @@ export function formatStoresTable(stores: Store[]): string {
     '  ' +
     [
       padRight('ID', widths.id),
-      padRight('Nimi', widths.name),
-      padRight('Kaupunki', widths.city),
-      padRight('Osoite', widths.address),
-      padRight('Tänään', widths.today),
+      padRight('Name', widths.name),
+      padRight('City', widths.city),
+      padRight('Address', widths.address),
+      padRight('Today', widths.today),
     ].join('  ');
   const sep =
     '  ' +
