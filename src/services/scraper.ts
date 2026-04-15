@@ -247,7 +247,7 @@ export class AlkoScraper {
     logger.info('Establishing session with alko.fi');
 
     try {
-      await this.page!.goto('https://www.alko.fi/', {
+      await this.page!.goto(`${config.alkoBaseUrl}/`, {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
       });
@@ -452,7 +452,7 @@ export class AlkoScraper {
     logger.info('Scraping product details', { productId });
 
     try {
-      await this.page!.goto(`https://www.alko.fi/tuotteet/${productId}`, {
+      await this.page!.goto(`${config.alkoBaseUrl}/tuotteet/${productId}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       });
