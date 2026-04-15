@@ -1,5 +1,5 @@
 import type { AlkoScraper } from './scraper.js';
-import type { SqliteService } from '../db/sqlite.js';
+import type { Product } from '../types/index.js';
 import { mapAlkoApiProduct } from './product-mapper.js';
 import { logger } from '../utils/logger.js';
 
@@ -23,14 +23,28 @@ export interface SyncOptions {
 }
 
 /**
+ * Narrow surface of `SqliteService` that syncProducts actually touches.
+ * Declared explicitly so tests can pass minimal structurally-compatible
+ * stubs without a type cast; `SqliteService` satisfies this shape
+ * structurally.
+ */
+export interface ProductSyncDb {
+  upsertProducts(products: Product[]): { added: number; updated: number };
+  deleteProductsNotIn(keepIds: Set<string>): number;
+}
+
+/** Narrow surface of {@link AlkoScraper} used by syncProducts. */
+export type ProductSyncScraper = Pick<AlkoScraper, 'listProducts'>;
+
+/**
  * Sync the catalog from Alko's internal search API into the local SQLite
  * store. Scraper elapsed-time is dominated by Incapsula-respecting rate
  * limiting, so the full catalog (~11 400 products, 500 per page) takes
  * on the order of tens of seconds.
  */
 export async function syncProducts(
-  db: SqliteService,
-  scraper: AlkoScraper,
+  db: ProductSyncDb,
+  scraper: ProductSyncScraper,
   opts: SyncOptions = {}
 ): Promise<SyncResult> {
   const start = Date.now();

@@ -1,5 +1,5 @@
 import type { AlkoScraper } from './scraper.js';
-import type { SqliteService } from '../db/sqlite.js';
+import type { Store } from '../types/index.js';
 import { mapAlkoApiStore } from './store-mapper.js';
 import { logger } from '../utils/logger.js';
 
@@ -12,13 +12,27 @@ export interface StoreSyncResult {
 }
 
 /**
+ * Narrow surface of `SqliteService` that syncStores actually touches —
+ * declared so tests can pass structurally-compatible stubs without
+ * casting through `unknown`. `SqliteService` satisfies this shape
+ * structurally.
+ */
+export interface StoreSyncDb {
+  upsertStores(stores: Store[]): { added: number; updated: number };
+  deleteStoresNotIn(keepIds: Set<string>): number;
+}
+
+/** Narrow surface of {@link AlkoScraper} used by syncStores. */
+export type StoreSyncScraper = Pick<AlkoScraper, 'listStores'>;
+
+/**
  * Sync the Alko store directory into the local SQLite store. Pulls the
  * full directory in a single /api/stores call (it's small — ~360 rows)
  * and upserts.
  */
 export async function syncStores(
-  db: SqliteService,
-  scraper: AlkoScraper
+  db: StoreSyncDb,
+  scraper: StoreSyncScraper
 ): Promise<StoreSyncResult> {
   logger.info('Fetching stores from Alko API');
   const rawStores = await scraper.listStores();

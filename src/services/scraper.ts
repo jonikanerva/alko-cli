@@ -33,12 +33,15 @@ export interface AvailabilityApiResponse {
   count: number; // exact stock quantity
   storeName: string;
   outletType: string;
-  address: string;
+  // address / city / postalCode occasionally come through missing on
+  // the API side, so accept undefined at the type level and let the
+  // parser default them to empty strings.
+  address?: string;
   latitude: number;
   longitude: number;
   openHours: Array<{ hours: string; date: string }>;
-  city: string;
-  postalCode: string;
+  city?: string;
+  postalCode?: string;
   open: boolean;
 }
 
@@ -145,7 +148,7 @@ function classifyStock(count: number): StoreAvailability['status'] {
  * Playwright.
  */
 export function parseAvailabilityApiResponse(
-  apiData: AvailabilityApiResponse[]
+  apiData: AvailabilityApiResponse[] | null | undefined
 ): StoreAvailability[] {
   if (!Array.isArray(apiData)) return [];
   return apiData

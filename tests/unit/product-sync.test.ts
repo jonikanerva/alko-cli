@@ -1,21 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
-import { syncProducts } from '../../src/services/product-sync.js';
-import type { AlkoApiProduct, AlkoScraper } from '../../src/services/scraper.js';
-import type { SqliteService } from '../../src/db/sqlite.js';
+import {
+  syncProducts,
+  type ProductSyncDb,
+  type ProductSyncScraper,
+} from '../../src/services/product-sync.js';
+import type { AlkoApiProduct } from '../../src/services/scraper.js';
 import type { Product } from '../../src/types/index.js';
 
 /**
- * Minimal test doubles for the SqliteService surface that syncProducts
- * actually calls. Using a Pick keeps us off `any` while leaving the
- * rest of SqliteService unimplemented.
+ * Build the narrow db double syncProducts expects. Returning the mock
+ * functions directly (not via a cast) means TypeScript enforces that
+ * the shape matches the real `ProductSyncDb` surface.
  */
-type SqliteSurface = Pick<SqliteService, 'upsertProducts' | 'deleteProductsNotIn' | 'setMeta'>;
-type ScraperSurface = Pick<AlkoScraper, 'listProducts'>;
-
-function makeDb(): SqliteSurface & {
+function makeDb(): ProductSyncDb & {
   upsertProducts: ReturnType<typeof vi.fn>;
   deleteProductsNotIn: ReturnType<typeof vi.fn>;
-  setMeta: ReturnType<typeof vi.fn>;
 } {
   return {
     upsertProducts: vi.fn<(p: Product[]) => { added: number; updated: number }>(() => ({
@@ -23,13 +22,12 @@ function makeDb(): SqliteSurface & {
       updated: 0,
     })),
     deleteProductsNotIn: vi.fn<(ids: Set<string>) => number>(() => 0),
-    setMeta: vi.fn<(key: string, value: string) => void>(),
   };
 }
 
-function makeScraper(products: AlkoApiProduct[]): ScraperSurface {
+function makeScraper(products: AlkoApiProduct[]): ProductSyncScraper {
   return {
-    listProducts: vi.fn<AlkoScraper['listProducts']>(async () => products),
+    listProducts: vi.fn(async () => products),
   };
 }
 
@@ -49,7 +47,7 @@ describe('syncProducts', () => {
     const db = makeDb();
     const scraper = makeScraper([sampleApiProduct]);
 
-    await syncProducts(db as unknown as SqliteService, scraper as unknown as AlkoScraper, {});
+    await syncProducts(db, scraper, {});
 
     expect(db.deleteProductsNotIn).toHaveBeenCalledOnce();
     const keepIds = db.deleteProductsNotIn.mock.calls[0][0] as Set<string>;
@@ -60,20 +58,24 @@ describe('syncProducts', () => {
     const db = makeDb();
     const scraper = makeScraper([sampleApiProduct]);
 
-    await syncProducts(db as unknown as SqliteService, scraper as unknown as AlkoScraper, {
-      limit: 5,
-    });
+    await syncProducts(db, scraper, { limit: 5 });
 
     expect(db.deleteProductsNotIn).not.toHaveBeenCalled();
   });
 
   it('does NOT stamp last_sync meta (defers to the update command)', async () => {
+    // `setMeta` is intentionally absent from ProductSyncDb — the service
+    // has no way to call it. This test asserts the sync result came back
+    // cleanly without mutating any other meta-adjacent surface.
     const db = makeDb();
     const scraper = makeScraper([sampleApiProduct]);
 
-    await syncProducts(db as unknown as SqliteService, scraper as unknown as AlkoScraper, {});
+    const result = await syncProducts(db, scraper, {});
 
-    expect(db.setMeta).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    // The db double exposes only upsertProducts + deleteProductsNotIn, so
+    // an accidental `setMeta` call would not even compile — the contract
+    // is enforced at the type level rather than via runtime spying.
   });
 
   it('drops invalid payloads before upsert and reports the count', async () => {
@@ -84,11 +86,7 @@ describe('syncProducts', () => {
       { id: '222', name: '', price: 10 } as AlkoApiProduct,
     ]);
 
-    const result = await syncProducts(
-      db as unknown as SqliteService,
-      scraper as unknown as AlkoScraper,
-      {}
-    );
+    const result = await syncProducts(db, scraper, {});
 
     expect(result.productsProcessed).toBe(1);
     expect(result.invalidCount).toBe(1);
@@ -107,7 +105,7 @@ describe('syncProducts', () => {
       { id: '222', name: '', price: 10 } as AlkoApiProduct, // invalid
     ]);
 
-    await syncProducts(db as unknown as SqliteService, scraper as unknown as AlkoScraper, {});
+    await syncProducts(db, scraper, {});
 
     const keepIds = db.deleteProductsNotIn.mock.calls[0][0] as Set<string>;
     expect(keepIds.has('111')).toBe(true);
