@@ -141,10 +141,10 @@ export class SqliteService {
    * Preserves created_at for existing products, bumps updated_at to now.
    *
    * The UPDATE path only rewrites columns the Alko search API is known
-   * to supply (price, type, country, alcohol, etc.). Columns the API
-   * does not expose — producer, ean, subtype, special_group, region,
-   * notes, and all enrichment / beer-spec columns — are left alone, so
-   * a value populated out-of-band (e.g. via `alko show --enrich`)
+   * to supply (price, type, country, alcohol, notes, etc.). Columns the
+   * API does not expose — producer, ean, subtype, special_group, region,
+   * label_notes, and all enrichment / beer-spec columns — are left alone,
+   * so a value populated out-of-band (e.g. via `alko show --enrich`)
    * survives a re-sync. INSERT still writes every column because a
    * brand-new row has nothing to preserve.
    */
