@@ -1,9 +1,9 @@
 # Alko CLI
 
-Command-line interface for the Alko.fi alcohol product catalog. Ports the
-`alko-mcp` MCP server's data model to a local SQLite file so a human (or
-script) can query the catalog directly without running the MCP server or
-Firestore.
+Command-line interface for the Alko.fi alcohol product catalog. Mirrors
+the catalog into a local SQLite file so a human (or script) can query
+products, stores and real-time availability without hitting the network
+repeatedly.
 
 ## Project structure
 
@@ -43,23 +43,6 @@ alko-cli/
 ├── dist/                        # Compiled JS (tsc output; not committed)
 └── package.json
 ```
-
-## Relationship to `alko-mcp`
-
-This CLI is the single-user, offline-capable sibling of the MCP server at
-`../alko-mcp`. They share domain concepts (products, stores, food
-pairings) but diverge on storage:
-
-| Concern         | `alko-mcp`                          | `alko-cli`                  |
-| --------------- | ----------------------------------- | --------------------------- |
-| Storage         | Google Firestore                    | Local SQLite (node:sqlite)  |
-| Transport       | MCP stdio / HTTP                    | Process invocation          |
-| Full-text       | Client-side scoring over 15 000 rows| SQLite FTS5 (unicode61)     |
-| Deployment      | Cloud Run                           | `npm link`                  |
-
-When porting a feature from the MCP server, expect to strip Firestore
-imports (`@google-cloud/firestore`, `Timestamp`) and swap
-`FirestoreService` calls for `SqliteService`.
 
 ## Language Policy
 
@@ -247,9 +230,8 @@ npm run test:all             # typecheck + lint + test:run + build
 
 6. **Availability uses Alko's JSON API.** The scraper calls
    `/api/product-api/availability/{productId}` from inside the Playwright
-   page context (so session cookies and Incapsula tokens are applied
-   automatically). The old DOM-scraping path from alko-mcp is obsolete —
-   we get exact stock counts instead of "6-10" ranges.
+   page context so session cookies and Incapsula tokens are applied
+   automatically. Returns exact per-store stock counts.
 
 7. **Meta table** (`meta` in SQLite) stores `schema_version`, `last_sync`,
    `last_sync_source`, `last_sync_product_count`. `alko update` writes

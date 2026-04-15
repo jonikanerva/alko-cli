@@ -127,8 +127,7 @@ interface StoresApiResponse {
 }
 
 /**
- * Classify a stock count into a coarse status bucket. Matches the
- * conventions used by the Alko MCP server's scraper for consistency.
+ * Classify a stock count into a coarse status bucket.
  */
 function classifyStock(count: number): StoreAvailability['status'] {
   if (count <= 0) return 'out_of_stock';

@@ -93,7 +93,7 @@ describe('formatJson', () => {
     expect(formatJson({ a: 1 })).toBe('{"a":1}\n');
   });
 
-  it('preserves null values (unlike the MCP tools which strip them)', () => {
+  it('preserves null values verbatim', () => {
     expect(formatJson({ a: null })).toBe('{"a":null}\n');
   });
 });

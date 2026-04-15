@@ -1,8 +1,7 @@
 # alko-cli
 
 Command-line tool for querying the Alko.fi alcohol product catalog from a
-local SQLite mirror. Companion to the `alko-mcp` Model Context Protocol
-server — same upstream data, different surface.
+local SQLite mirror.
 
 ## Features
 

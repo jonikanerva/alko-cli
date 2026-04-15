@@ -11,7 +11,7 @@ import { logger } from '../utils/logger.js';
 
 /**
  * SqliteService — local SQLite storage layer.
- * Replaces the original FirestoreService with a synchronous, file-backed store.
+ * Synchronous, file-backed via Node's built-in `node:sqlite` module.
  */
 export class SqliteService {
   private readonly db: DatabaseSync;
