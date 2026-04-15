@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { syncProducts } from '../services/product-sync.js';
 import { syncStores } from '../services/store-sync.js';
 import { getAlkoScraper, registerBrowserCleanup } from '../services/scraper.js';
+import { parsePositiveInt } from '../utils/cli-parse.js';
 import { logger } from '../utils/logger.js';
 
 interface UpdateOptions {
@@ -51,8 +52,9 @@ export function registerUpdateCommand(program: Command): void {
         }
       }
 
-      const limit = opts.limit ? parsePositiveInt(opts.limit, '--limit') : undefined;
-      const pageSize = opts.pageSize ? parsePositiveInt(opts.pageSize, '--page-size') : undefined;
+      const limit = opts.limit === undefined ? undefined : parsePositiveInt(opts.limit, '--limit');
+      const pageSize =
+        opts.pageSize === undefined ? undefined : parsePositiveInt(opts.pageSize, '--page-size');
 
       registerBrowserCleanup();
       const scraper = getAlkoScraper();
@@ -98,10 +100,3 @@ export function registerUpdateCommand(program: Command): void {
     });
 }
 
-function parsePositiveInt(raw: string, flag: string): number {
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new Error(`${flag} must be a positive integer (got "${raw}")`);
-  }
-  return n;
-}

@@ -162,6 +162,24 @@ describe('alko CLI end-to-end', () => {
     expect(status.products.lastSync).toBeTruthy();
   });
 
+  it('rejects decimal --limit values with a clear error', () => {
+    const result = runCliWithStderr(['list', '--limit', '1.2'], { ALKO_DB_PATH: dbPath });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--limit must be a positive integer/);
+  });
+
+  it('rejects negative --limit values with a clear error', () => {
+    const result = runCliWithStderr(['list', '--limit', '-5'], { ALKO_DB_PATH: dbPath });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--limit must be a positive integer/);
+  });
+
+  it('rejects unknown --order values', () => {
+    const result = runCliWithStderr(['list', '--order', 'sideways'], { ALKO_DB_PATH: dbPath });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--order must be "asc" or "desc"/);
+  });
+
   it('rejects non-numeric availability product ids', () => {
     const result = runCliWithStderr(['availability', 'bad-id'], {
       ALKO_DB_PATH: dbPath,

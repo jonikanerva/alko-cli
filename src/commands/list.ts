@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { SqliteService } from '../db/sqlite.js';
 import { getDbPath } from '../utils/paths.js';
 import { detectFormat, formatJson, formatProductsTable } from '../utils/formatter.js';
+import { parsePositiveInt, parseSortOrder } from '../utils/cli-parse.js';
 import type { ProductSearchFilters, ProductSearchOptions, SmokinessLevel } from '../types/product.js';
 
 interface ListOptions {
@@ -95,12 +96,12 @@ export function registerListCommand(program: Command): void {
         if (opts.sort && !sortBy) {
           throw new Error(`Invalid --sort: ${opts.sort}. Use: name|price|alcohol|pricePerLiter`);
         }
-        const sortOrder = opts.order === 'desc' ? 'desc' : 'asc';
+        const sortOrder = parseSortOrder(opts.order);
 
         const options: ProductSearchOptions = {
           sortBy,
           sortOrder,
-          limit: parseNumber(opts.limit, 'limit'),
+          limit: opts.limit === undefined ? undefined : parsePositiveInt(opts.limit, '--limit'),
         };
 
         const result = db.searchProducts(filters, options);
