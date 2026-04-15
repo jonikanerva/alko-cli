@@ -1,13 +1,13 @@
 # alko-cli
 
 Command-line tool for querying the Alko.fi alcohol product catalog from a
-local SQLite mirror. Companion to the `alko-mcp` Model Context Protocol
-server — same upstream data, different surface.
+local SQLite mirror.
 
 ## Features
 
-- **Local SQLite catalog** (~12 000 products) seeded from Alko's official
-  Excel price list — no network required for searches.
+- **Local SQLite catalog** (~11 000 products) synced from Alko.fi's
+  internal product JSON API via Playwright — no network required for
+  searches once the catalog is seeded.
 - **Full-text search** via SQLite FTS5 (unicode-normalised) with relevance
   scoring for name / producer / description matches.
 - **Real-time store availability** via Playwright-driven scraping of
@@ -38,7 +38,7 @@ Once linked, `alko --help` works from anywhere. Otherwise run it as
 ## Quick start
 
 ```bash
-# Seed the local catalog (downloads alko.fi's price list, ~12k products)
+# Seed the local catalog (fetches alko.fi's full product list, ~11k products)
 alko update
 
 # Browse what you have
@@ -54,7 +54,7 @@ alko availability 000001 --city Helsinki
 
 | Command                         | Purpose                                                                             |
 | ------------------------------- | ----------------------------------------------------------------------------------- |
-| `alko update`                   | Download / refresh the product catalog from alko.fi's Excel price list.             |
+| `alko update`                   | Refresh the product catalog from alko.fi's product JSON API (via Playwright).       |
 | `alko list` (alias `search`)    | Filter and browse products from the local catalog.                                  |
 | `alko show <productId>`         | Print a single product's details, optionally enriched from alko.fi.                 |
 | `alko availability <productId>` | Check per-store stock in real time (scrapes alko.fi).                               |
@@ -68,11 +68,18 @@ When neither flag is set the format is auto-picked from `stdout.isTTY`
 ### `alko update`
 
 ```bash
-alko update                  # Download alko.fi's price list
+alko update                  # Fetch the full catalog from alko.fi
 alko update --force          # Skip the 24 h "data is fresh" guard
-alko update --from-file foo.xlsx   # Sync from a local .xlsx (offline / testing)
+alko update --limit 100      # Stop after N products (handy for smoke tests)
+alko update --page-size 1000 # Products per API page (default 500, max 1000)
 alko update --json           # Emit a machine-readable sync summary
 ```
+
+Launches a headless Chromium, establishes a session with alko.fi, and
+paginates through Alko's internal product search API
+(`POST /api/search/product?lang=fi`). Catalog size is currently ~11 000
+products; a full sync takes on the order of tens of seconds because the
+scraper is rate-limited to respect the site.
 
 ### `alko list` / `alko search`
 
@@ -80,15 +87,16 @@ alko update --json           # Emit a machine-readable sync summary
 alko list --country Ranska --max-price 20
 alko list --query "cabernet sauvignon" --type punaviinit
 alko list --type oluet --beer-type ipa --min-alcohol 6
-alko list --organic --country Italia --sort price
+alko list --country Italia --sort price
 alko list --query "syrah" --limit 50 --json | jq '.products[].name'
 ```
 
 Filter flags: `--query`, `--type`, `--country`, `--region`, `--min-price`,
 `--max-price`, `--min-alcohol`, `--max-alcohol`, `--assortment`,
-`--special-group`, `--beer-type`, `--min-smokiness`, `--max-smokiness`,
-`--organic`, `--vegan`, `--new`. Sort with `--sort name|price|alcohol|pricePerLiter`
-and `--order asc|desc`. Paginate with `--limit N --offset K`.
+`--beer-type`, `--min-smokiness`, `--max-smokiness`.
+Sort with `--sort name|price|alcohol|pricePerLiter`
+and `--order asc|desc`. Use `--limit N` to cap the result count; the
+default returns every match (pipe to `head` / `less` for ad hoc trimming).
 
 ### `alko show`
 
@@ -136,11 +144,10 @@ Environment variables:
 | -------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `ALKO_DB_PATH`             | Override the SQLite file location (great for tests).            | `$XDG_DATA_HOME/alko-cli/alko.db` or `~/.config/alko-cli/alko.db`                                  |
 | `XDG_DATA_HOME`            | Base directory for the catalog.                                 | `~/.config`                                                                                         |
-| `ALKO_PRICE_LIST_URL`      | Upstream .xlsx URL.                                             | Alko's official hinnasto URL                                                                        |
 | `ALKO_BASE_URL`            | Base URL used by the scraper.                                   | `https://www.alko.fi`                                                                               |
 | `ALKO_UPDATE_STALENESS_MS` | How old `last_sync` can be before `alko update` actually runs.  | 24 h                                                                                                |
 | `SCRAPE_RATE_LIMIT_MS`     | Minimum interval between scraper requests.                      | 2000                                                                                                |
-| `LOG_LEVEL`                | `debug` \| `info` \| `warn` \| `error`.                         | `info`                                                                                              |
+| `LOG_LEVEL`                | `debug` \| `info` \| `warn` \| `error`.                         | `warn` (use `alko --debug <cmd>` or `LOG_LEVEL=info` to see progress logs)                          |
 
 ## Data layout
 

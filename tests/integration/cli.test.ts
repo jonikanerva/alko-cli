@@ -1,117 +1,24 @@
 /**
  * End-to-end CLI integration tests. Spawns the built `alko` binary against
- * a temporary SQLite file + synthetic .xlsx fixture, then verifies its JSON
- * output for each command.
+ * a temporary SQLite file pre-seeded with deterministic test products, then
+ * verifies its output for each command.
  *
  * Running the compiled binary avoids Vite's module-graph concerns with the
  * experimental `node:sqlite` builtin — Node's own loader handles it at
- * runtime.
+ * runtime. The test catalog is materialised by `seedTestCatalog`
+ * (tests/helpers/seed-db.ts) — no network, no Playwright.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, execSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as XLSX from 'xlsx';
+import { makeProduct, seedTestCatalog } from '../helpers/seed-db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(__filename), '..', '..');
 const CLI_ENTRY = join(PROJECT_ROOT, 'dist', 'cli.js');
-
-// Columns in the order the Alko Excel parser expects (see utils/excel-parser.ts).
-const HEADERS = [
-  'Numero',
-  'Nimi',
-  'Valmistaja',
-  'Pullokoko',
-  'Hinta',
-  'Litrahinta',
-  'Uutuus',
-  'Hinnastojärjestyskoodi',
-  'Tyyppi',
-  'Alatyyppi',
-  'Erityisryhmä',
-  'Oluttyyppi',
-  'Valmistusmaa',
-  'Alue',
-  'Vuosikerta',
-  'Etikettimerkintöjä',
-  'Huomautus',
-  'Rypäleet',
-  'Luonnehdinta',
-  'Pakkaustyyppi',
-  'Suljentatyyppi',
-  'Alkoholi-%',
-  'Hapot g/l',
-  'Sokeri g/l',
-  'Kantavierrep-%',
-  'Väri EBC',
-  'Katkerot EBU',
-  'Energia kcal/100 ml',
-  'Valikoima',
-  'EAN',
-];
-
-type Row = (string | number | null)[];
-
-function row(
-  numero: string,
-  overrides: Partial<{
-    name: string;
-    producer: string;
-    price: number;
-    pricePerLiter: number;
-    bottleSize: string;
-    type: string;
-    beerType: string | null;
-    specialGroup: string | null;
-    country: string;
-    region: string | null;
-    alcohol: number;
-  }> = {}
-): Row {
-  return [
-    numero,
-    overrides.name ?? 'Test product',
-    overrides.producer ?? 'Test Producer',
-    overrides.bottleSize ?? '0,75 l',
-    overrides.price ?? 10,
-    overrides.pricePerLiter ?? 13.33,
-    null,
-    1,
-    overrides.type ?? 'punaviinit',
-    null,
-    overrides.specialGroup ?? null,
-    overrides.beerType ?? null,
-    overrides.country ?? 'Ranska',
-    overrides.region ?? null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    overrides.alcohol ?? 13.5,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    'vakiovalikoima',
-    '1234567890123',
-  ];
-}
-
-function makeFixtureXlsx(rows: Row[]): Buffer {
-  const data = [HEADERS, ...rows];
-  const sheet = XLSX.utils.aoa_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, 'Hinnasto');
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-}
 
 function runCli(args: string[], env: Record<string, string>): string {
   return execFileSync('node', [CLI_ENTRY, ...args], {
@@ -138,7 +45,6 @@ function runCliWithStderr(
 
 describe('alko CLI end-to-end', () => {
   let tmpDir: string;
-  let xlsxPath: string;
   let dbPath: string;
 
   beforeAll(() => {
@@ -147,26 +53,23 @@ describe('alko CLI end-to-end', () => {
     }
 
     tmpDir = mkdtempSync(join(tmpdir(), 'alko-cli-e2e-'));
-    xlsxPath = join(tmpDir, 'fixture.xlsx');
     dbPath = join(tmpDir, 'e2e.db');
 
-    writeFileSync(
-      xlsxPath,
-      makeFixtureXlsx([
-        row('000001', { name: 'Chateau Ranska', country: 'Ranska', price: 12 }),
-        row('000002', { name: 'Barolo Italia', country: 'Italia', price: 25 }),
-        row('000003', { name: 'Rioja Espanja', country: 'Espanja', price: 18 }),
-        row('000004', {
-          name: 'Belgialainen IPA',
-          type: 'oluet',
-          beerType: 'ipa',
-          country: 'Belgia',
-          bottleSize: '0,33 l',
-          alcohol: 6.2,
-          price: 4,
-        }),
-      ])
-    );
+    seedTestCatalog(dbPath, [
+      makeProduct({ id: '000001', name: 'Chateau Ranska', country: 'Ranska', price: 12 }),
+      makeProduct({ id: '000002', name: 'Barolo Italia', country: 'Italia', price: 25 }),
+      makeProduct({ id: '000003', name: 'Rioja Espanja', country: 'Espanja', price: 18 }),
+      makeProduct({
+        id: '000004',
+        name: 'Belgialainen IPA',
+        type: 'oluet',
+        beerType: 'ipa',
+        country: 'Belgia',
+        bottleSize: '0,33 l',
+        alcoholPercentage: 6.2,
+        price: 4,
+      }),
+    ]);
   });
 
   afterAll(() => {
@@ -181,16 +84,6 @@ describe('alko CLI end-to-end', () => {
     expect(out).toMatch(/show/);
     expect(out).toMatch(/stores/);
     expect(out).toMatch(/status/);
-  });
-
-  it('seeds the catalog from an xlsx fixture', () => {
-    const out = runCli(['update', '--from-file', xlsxPath, '--json'], {
-      ALKO_DB_PATH: dbPath,
-    });
-    const result = JSON.parse(out.trim());
-    expect(result.success).toBe(true);
-    expect(result.productsProcessed).toBe(4);
-    expect(result.source).toBe('file');
   });
 
   it('filters products by country', () => {
@@ -210,6 +103,36 @@ describe('alko CLI end-to-end', () => {
     const { products } = JSON.parse(out.trim());
     expect(products).toHaveLength(1);
     expect(products[0].id).toBe('000004');
+  });
+
+  it('honours --sort on a text query (relevance is only the default)', () => {
+    // Before the fix, FTS search forced relevance order and silently
+    // ignored --sort. Seed a small dedicated catalog so we can assert
+    // the ordering deterministically.
+    const sortDb = join(tmpDir, 'sort.db');
+    seedTestCatalog(sortDb, [
+      makeProduct({ id: '000101', name: 'Chianti A', country: 'Italia', price: 10 }),
+      makeProduct({ id: '000102', name: 'Chianti B', country: 'Italia', price: 25 }),
+      makeProduct({ id: '000103', name: 'Chianti C', country: 'Italia', price: 15 }),
+    ]);
+
+    const descOut = runCli(
+      ['list', '--query', 'chianti', '--sort', 'price', '--order', 'desc', '--json'],
+      { ALKO_DB_PATH: sortDb }
+    );
+    const descPrices = JSON.parse(descOut.trim()).products.map(
+      (p: { price: number }) => p.price
+    );
+    expect(descPrices).toEqual([25, 15, 10]);
+
+    const ascOut = runCli(
+      ['list', '--query', 'chianti', '--sort', 'price', '--json'],
+      { ALKO_DB_PATH: sortDb }
+    );
+    const ascPrices = JSON.parse(ascOut.trim()).products.map(
+      (p: { price: number }) => p.price
+    );
+    expect(ascPrices).toEqual([10, 15, 25]);
   });
 
   it('applies price bounds', () => {
@@ -239,6 +162,24 @@ describe('alko CLI end-to-end', () => {
     expect(status.products.lastSync).toBeTruthy();
   });
 
+  it('rejects decimal --limit values with a clear error', () => {
+    const result = runCliWithStderr(['list', '--limit', '1.2'], { ALKO_DB_PATH: dbPath });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--limit must be a positive integer/);
+  });
+
+  it('rejects negative --limit values with a clear error', () => {
+    const result = runCliWithStderr(['list', '--limit', '-5'], { ALKO_DB_PATH: dbPath });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--limit must be a positive integer/);
+  });
+
+  it('rejects unknown --order values', () => {
+    const result = runCliWithStderr(['list', '--order', 'sideways'], { ALKO_DB_PATH: dbPath });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--order must be "asc" or "desc"/);
+  });
+
   it('rejects non-numeric availability product ids', () => {
     const result = runCliWithStderr(['availability', 'bad-id'], {
       ALKO_DB_PATH: dbPath,
@@ -253,5 +194,76 @@ describe('alko CLI end-to-end', () => {
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/not found/);
+  });
+
+  it('re-upserting an API-style payload updates API-owned notes', () => {
+    // Regression: the UPDATE path used to skip `notes` even though the
+    // mapper sources it from `raw.additionalInfo`, so changes to the
+    // upstream note never reached existing rows.
+    const notesDb = join(tmpDir, 'notes.db');
+    seedTestCatalog(notesDb, [
+      makeProduct({ id: '000201', name: 'Noteworthy', notes: 'note-1' }),
+    ]);
+    seedTestCatalog(notesDb, [
+      makeProduct({ id: '000201', name: 'Noteworthy', notes: 'note-2' }),
+    ]);
+
+    const out = runCli(['show', '000201', '--json'], { ALKO_DB_PATH: notesDb });
+    const product = JSON.parse(out.trim());
+    expect(product.notes).toBe('note-2');
+  });
+
+  it('re-upserting an API-style payload preserves API-unowned fields', () => {
+    // Simulates the real-world flow: catalog was seeded with full data
+    // (producer, region, specialGroup, isNew, tasteProfile from --enrich),
+    // then `alko update` runs a resync where the Alko search API does NOT
+    // expose those columns. The mapper returns empty/null defaults for
+    // them, but the DB UPDATE path must keep the existing values.
+    const preserveDb = join(tmpDir, 'preserve.db');
+    const original = makeProduct({
+      id: '111111',
+      name: 'Old Name',
+      producer: 'Legacy Producer',
+      ean: '6411100001234',
+      region: 'Bordeaux',
+      specialGroup: 'Luomu',
+      isNew: true,
+      price: 10,
+      tasteProfile: 'Original enrichment taste profile',
+    });
+    seedTestCatalog(preserveDb, [original]);
+
+    const apiResync = makeProduct({
+      id: '111111',
+      name: 'New Name From API',
+      price: 25,
+      type: 'valkoviinit',
+      country: 'Italia',
+      // Fields the Alko search API does not expose — mapper sets defaults:
+      producer: '',
+      ean: '',
+      region: null,
+      specialGroup: null,
+      isNew: false,
+      tasteProfile: null,
+    });
+    seedTestCatalog(preserveDb, [apiResync]);
+
+    const out = runCli(['show', '111111', '--json'], { ALKO_DB_PATH: preserveDb });
+    const product = JSON.parse(out.trim());
+
+    // API-owned columns: updated
+    expect(product.name).toBe('New Name From API');
+    expect(product.price).toBe(25);
+    expect(product.type).toBe('valkoviinit');
+    expect(product.country).toBe('Italia');
+
+    // API-unowned columns: preserved
+    expect(product.producer).toBe('Legacy Producer');
+    expect(product.ean).toBe('6411100001234');
+    expect(product.region).toBe('Bordeaux');
+    expect(product.specialGroup).toBe('Luomu');
+    expect(product.isNew).toBe(true);
+    expect(product.tasteProfile).toBe('Original enrichment taste profile');
   });
 });

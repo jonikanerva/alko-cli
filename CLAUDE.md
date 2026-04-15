@@ -1,9 +1,9 @@
 # Alko CLI
 
-Command-line interface for the Alko.fi alcohol product catalog. Ports the
-`alko-mcp` MCP server's data model to a local SQLite file so a human (or
-script) can query the catalog directly without running the MCP server or
-Firestore.
+Command-line interface for the Alko.fi alcohol product catalog. Mirrors
+the catalog into a local SQLite file so a human (or script) can query
+products, stores and real-time availability without hitting the network
+repeatedly.
 
 ## Project structure
 
@@ -13,49 +13,34 @@ alko-cli/
 │   ├── cli.ts                   # Entry point — registers commander commands
 │   ├── config.ts                # Env-driven config
 │   ├── commands/
-│   │   ├── update.ts            # alko update (sync from .xlsx)
+│   │   ├── update.ts            # alko update (sync via Playwright + JSON API)
 │   │   ├── list.ts              # alko list / search (filtered catalog)
 │   │   ├── show.ts              # alko show [--enrich]
 │   │   ├── availability.ts      # alko availability (real-time stock)
 │   │   ├── stores.ts            # alko stores (list from DB)
 │   │   └── status.ts            # alko status (catalog metadata)
 │   ├── services/
-│   │   ├── downloader.ts        # Excel price-list fetcher (session cookies)
-│   │   ├── data-sync.ts         # download → parse → validate → upsert
-│   │   └── scraper.ts           # Playwright scraper (availability + enrich)
+│   │   ├── product-sync.ts      # listProducts → mapAlkoApiProduct → upsert
+│   │   ├── product-mapper.ts    # Pure mapper: AlkoApiProduct → Product
+│   │   ├── store-sync.ts        # listStores → mapAlkoApiStore → upsert
+│   │   ├── store-mapper.ts      # Pure mapper: AlkoApiStore → Store
+│   │   └── scraper.ts           # Playwright scraper (listProducts + listStores + availability + enrich)
 │   ├── db/
 │   │   ├── schema.ts            # SQL DDL + FTS5 virtual table
 │   │   └── sqlite.ts            # SqliteService (node:sqlite)
 │   ├── types/                   # Shared type definitions
 │   └── utils/
-│       ├── excel-parser.ts      # xlsx parser mapping to Product
 │       ├── formatter.ts         # Table / JSON output helpers (isTTY autodetect)
 │       ├── logger.ts            # Stderr-only leveled logger
 │       ├── paths.ts             # DB path resolution (XDG-aware, ALKO_DB_PATH)
 │       └── rate-limiter.ts      # Scraper throttling + exponential backoff
 ├── tests/
-│   ├── unit/                    # Pure-function tests (formatter, scraper parser)
+│   ├── helpers/seed-db.ts       # Seed temp SQLite for integration tests
+│   ├── unit/                    # Pure-function tests (formatter, scraper parser, mapper)
 │   └── integration/             # End-to-end CLI spawn tests
 ├── dist/                        # Compiled JS (tsc output; not committed)
 └── package.json
 ```
-
-## Relationship to `alko-mcp`
-
-This CLI is the single-user, offline-capable sibling of the MCP server at
-`../alko-mcp`. They share domain concepts (products, stores, food
-pairings) but diverge on storage:
-
-| Concern         | `alko-mcp`                          | `alko-cli`                  |
-| --------------- | ----------------------------------- | --------------------------- |
-| Storage         | Google Firestore                    | Local SQLite (node:sqlite)  |
-| Transport       | MCP stdio / HTTP                    | Process invocation          |
-| Full-text       | Client-side scoring over 15 000 rows| SQLite FTS5 (unicode61)     |
-| Deployment      | Cloud Run                           | `npm link`                  |
-
-When porting a feature from the MCP server, expect to strip Firestore
-imports (`@google-cloud/firestore`, `Timestamp`) and swap
-`FirestoreService` calls for `SqliteService`.
 
 ## Language Policy
 
@@ -89,7 +74,8 @@ Run before every commit and PR — all must pass, no exceptions:
 npm run test:all
 ```
 
-This runs: `typecheck → lint → test:run → build`.
+This runs: `typecheck → lint → build → test:run`. Build is ahead of
+the test run so integration tests always spawn a fresh `dist/cli.js`.
 
 Integration tests need `dist/cli.js` to exist; the suite auto-builds if
 missing, but `npm run build` first speeds up the first run.
@@ -178,9 +164,10 @@ CI checks must be green before verdict can be PASS.
 - **Unit tests** (`tests/unit/`) cover pure functions: the availability
   API parser and every formatter helper.
 - **End-to-end tests** (`tests/integration/cli.test.ts`) spawn the built
-  CLI against a temp SQLite + synthetic .xlsx fixture. They exercise
-  `update --from-file`, `list`, `show`, `status` and the error paths.
-  The spawn approach sidesteps Vite's `node:sqlite` resolution issue.
+  CLI against a temp SQLite that `tests/helpers/seed-db.ts` populates
+  directly via `SqliteService`. They exercise `list`, `show`, `status`
+  and the error paths without touching the network. The spawn approach
+  sidesteps Vite's `node:sqlite` resolution issue.
 
 ## Implementation Discipline
 
@@ -228,20 +215,35 @@ npm run test:all             # typecheck + lint + test:run + build
    cleanly. Each command's `finally` block is still the primary close
    path; the signal handlers are defense-in-depth.
 
-5. **Availability uses Alko's JSON API.** The scraper calls
-   `/api/product-api/availability/{productId}` from inside the Playwright
-   page context (so session cookies and Incapsula tokens are applied
-   automatically). The old DOM-scraping path from alko-mcp is obsolete —
-   we get exact stock counts instead of "6-10" ranges.
+5. **Catalog sync uses Alko's internal search API.** `AlkoScraper.listProducts()`
+   POSTs to `/api/search/product?lang=fi` from inside the Playwright page
+   context (Incapsula tokens applied automatically). The endpoint is an
+   Azure Cognitive Search style envelope (`@odata.count` + `value[]`) and
+   accepts `{top, skip}` pagination.
 
-6. **Meta table** (`meta` in SQLite) stores `schema_version`, `last_sync`,
+   `alko update` also syncs the store directory in the same Playwright
+   session via `AlkoScraper.listStores()` (GET `/api/stores`, a single
+   ~600 kB envelope — no pagination needed).
+
+6. **Availability uses Alko's JSON API.** The scraper calls
+   `/api/product-api/availability/{productId}` from inside the Playwright
+   page context so session cookies and Incapsula tokens are applied
+   automatically. Returns exact per-store stock counts.
+
+7. **Meta table** (`meta` in SQLite) stores `schema_version`, `last_sync`,
    `last_sync_source`, `last_sync_product_count`. `alko update` writes
    these; `alko status` reads them.
 
-7. **Stderr-only logger.** `utils/logger.ts` writes to stderr so commands
-   can safely pipe machine-readable JSON on stdout (`LOG_LEVEL=debug
-   alko list --json | jq` still works). Matches the `alko-mcp`
-   convention for the same reason.
+8. **Stderr-only logger.** `utils/logger.ts` writes to stderr so commands
+   can safely pipe machine-readable JSON on stdout. Default level is
+   `warn` so routine CLI runs stay quiet; `--debug` (wired in `cli.ts`
+   via a `preAction` hook on the root command) flips it to `debug` for
+   the current invocation. `LOG_LEVEL` env var still works for scripts.
+
+9. **Suppressing node:sqlite's ExperimentalWarning.** The CLI shebang is
+   `#!/usr/bin/env -S node --no-warnings=ExperimentalWarning` — Node 24's
+   targeted `--no-warnings=<name>` silences the SQLite experimental notice
+   without hiding genuine warnings.
 
 ## Gotchas
 
@@ -250,6 +252,14 @@ npm run test:all             # typecheck + lint + test:run + build
 - **Playwright's `waitForTimeout`** is intentionally used to wait for
   Incapsula's JS challenge to run; do not replace it with
   `waitForLoadState('networkidle')` — the page is deliberately noisy.
-- **Excel column order** is load-bearing. The parser identifies rows by
-  position, not column name, so changes to Alko's spreadsheet layout
-  require updating `utils/excel-parser.ts`.
+- **Alko's product API is undocumented.** The endpoints
+  (`POST /api/search/product?lang=fi`, `GET /api/stores`) and their
+  payload shapes are reverse engineered from live traffic. If `alko
+  update` starts returning empty or differently shaped data, open
+  DevTools on `alko.fi/tuotteet/tuotelistaus`, observe the real call,
+  and update `AlkoScraper.listProducts()` / `listStores()` and their
+  mappers accordingly.
+- **Fields the API does not expose** (producer, EAN, region, vintage as
+  a column, acids, sugar, energy, EBC, EBU) are stored as empty / null
+  in the catalog. `alko show --enrich` can fill some of these from the
+  product detail page when needed.

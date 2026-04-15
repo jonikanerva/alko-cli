@@ -2,21 +2,13 @@ import { Command } from 'commander';
 import { SqliteService } from '../db/sqlite.js';
 import { getDbPath } from '../utils/paths.js';
 import { detectFormat, formatJson, formatStoresTable } from '../utils/formatter.js';
+import { parsePositiveInt } from '../utils/cli-parse.js';
 
 interface StoresOptions {
   city?: string;
   limit?: string;
   json?: boolean;
   table?: boolean;
-}
-
-function parseLimit(raw: string | undefined, fallback: number): number {
-  if (raw === undefined) return fallback;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new Error(`Invalid --limit: ${raw}`);
-  }
-  return Math.floor(n);
 }
 
 export function registerStoresCommand(program: Command): void {
@@ -34,7 +26,7 @@ export function registerStoresCommand(program: Command): void {
     .action((opts: StoresOptions) => {
       const db = new SqliteService(getDbPath());
       try {
-        const limit = parseLimit(opts.limit, 50);
+        const limit = opts.limit === undefined ? 50 : parsePositiveInt(opts.limit, '--limit');
         const stores = db.listStores(opts.city, limit);
 
         if (stores.length === 0) {

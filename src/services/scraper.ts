@@ -33,18 +33,106 @@ export interface AvailabilityApiResponse {
   count: number; // exact stock quantity
   storeName: string;
   outletType: string;
-  address: string;
+  // address / city / postalCode occasionally come through missing on
+  // the API side, so accept undefined at the type level and let the
+  // parser default them to empty strings.
+  address?: string;
   latitude: number;
   longitude: number;
   openHours: Array<{ hours: string; date: string }>;
-  city: string;
-  postalCode: string;
+  city?: string;
+  postalCode?: string;
   open: boolean;
 }
 
 /**
- * Classify a stock count into a coarse status bucket. Matches the
- * conventions used by the Alko MCP server's scraper for consistency.
+ * One product entry returned by Alko's internal search API
+ *   POST /api/search/product?lang=fi
+ *   body: {"top": N, "skip": M}
+ *
+ * The shape is captured from live traffic — not a documented contract.
+ * If Alko changes the payload, open DevTools on /tuotteet/tuotelistaus
+ * to re-observe the request/response and update this type + the mapper.
+ *
+ * Only the fields actually consumed by the mapper are declared; the
+ * index signature accepts any extra keys Alko adds in the future without
+ * forcing the raw type to track them.
+ */
+export interface AlkoApiProduct {
+  id: string;
+  name: string;
+  price?: number | string;
+  abv?: number | string;
+  volume?: number | string;
+  countryName?: string;
+  country?: string;
+  mainGroupName?: string[];
+  productGroupName?: string[];
+  beerStyleName?: string[];
+  tasteStyleName?: string[];
+  grapes?: string[];
+  packageSizes?: string[];
+  packageTypes?: string[];
+  closures?: string[];
+  selectionTypes?: string[];
+  certificateId?: string[];
+  taste?: string | null;
+  additionalInfo?: string | null;
+  webshopStock?: number | null;
+  onlineAvailability?: boolean;
+  statusId?: string;
+  [key: string]: unknown;
+}
+
+interface SearchApiResponse {
+  '@odata.count'?: number;
+  value?: AlkoApiProduct[];
+}
+
+/**
+ * Options for {@link AlkoScraper.listProducts}.
+ *
+ * - `limit` caps the total number of products returned (useful for
+ *   development / smoke-testing).
+ * - `pageSize` controls how many products are fetched per API call.
+ *   Clamped to [1, 1000]; the endpoint rejects larger pages.
+ * - `onProgress` is called after each page with the running total.
+ */
+export interface ListProductsOptions {
+  limit?: number;
+  pageSize?: number;
+  onProgress?: (fetched: number, total: number | null) => void;
+}
+
+/**
+ * Raw store shape returned by GET /api/stores on alko.fi.
+ *
+ * Like AlkoApiProduct, this was captured from live traffic (DevTools on
+ * any alko.fi page) rather than a documented contract. Only fields the
+ * mapper consumes are declared explicitly.
+ */
+export interface AlkoApiStore {
+  id: string;
+  name?: string;
+  name_sv?: string;
+  address?: string;
+  postalCode?: string;
+  postOffice?: string;
+  city?: string;
+  openHours?: Array<{ hours: string; date: string }>;
+  openDays?: string[];
+  outletType?: string;
+  longitude?: number;
+  latitude?: number;
+  [key: string]: unknown;
+}
+
+interface StoresApiResponse {
+  data?: AlkoApiStore[];
+}
+
+/**
+ * Classify a stock count into a coarse status bucket.
  */
 function classifyStock(count: number): StoreAvailability['status'] {
   if (count <= 0) return 'out_of_stock';
@@ -60,7 +148,7 @@ function classifyStock(count: number): StoreAvailability['status'] {
  * Playwright.
  */
 export function parseAvailabilityApiResponse(
-  apiData: AvailabilityApiResponse[]
+  apiData: AvailabilityApiResponse[] | null | undefined
 ): StoreAvailability[] {
   if (!Array.isArray(apiData)) return [];
   return apiData
@@ -162,7 +250,7 @@ export class AlkoScraper {
     logger.info('Establishing session with alko.fi');
 
     try {
-      await this.page!.goto('https://www.alko.fi/', {
+      await this.page!.goto(`${config.alkoBaseUrl}/`, {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
       });
@@ -235,7 +323,114 @@ export class AlkoScraper {
 
       // After repeated failures, drop the session so the next call
       // re-establishes it from scratch.
-      if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+      if (this.backoff.attempts > 3) {
+        this.sessionEstablished = false;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Fetch the full product catalog via Alko's internal search API.
+   *
+   * Calls POST /api/search/product?lang=fi with {top, skip} payloads from
+   * within the established browser session (so Incapsula tokens apply).
+   * Paginates until the reported @odata.count is reached, the API returns
+   * a short page, or `limit` is hit.
+   *
+   * Returns the raw Alko product objects; call `mapAlkoApiProduct` on each
+   * to project into the CLI's internal `Product` shape.
+   */
+  async listProducts(opts: ListProductsOptions = {}): Promise<AlkoApiProduct[]> {
+    if (!this.sessionEstablished) {
+      await this.init();
+      await this.establishSession();
+    }
+
+    const pageSize = Math.max(1, Math.min(opts.pageSize ?? 500, 1000));
+    const limit = opts.limit;
+    const collected: AlkoApiProduct[] = [];
+    let skip = 0;
+    let total: number | null = null;
+
+    for (;;) {
+      const want = limit === undefined ? pageSize : Math.min(pageSize, limit - collected.length);
+      if (want <= 0) break;
+
+      await this.rateLimiter.throttleWithJitter();
+      logger.info('listProducts page', { skip, want });
+
+      try {
+        const page = (await this.page!.evaluate(`
+          (async () => {
+            const r = await fetch('/api/search/product?lang=fi', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ top: ${want}, skip: ${skip} }),
+            });
+            if (!r.ok) throw new Error('API returned ' + r.status);
+            return r.json();
+          })()
+        `)) as SearchApiResponse;
+
+        if (total === null && typeof page['@odata.count'] === 'number') {
+          total = page['@odata.count'];
+        }
+        const batch = page.value ?? [];
+        collected.push(...batch);
+        this.backoff.reset();
+        opts.onProgress?.(collected.length, total);
+
+        if (batch.length < want) break;
+        skip += want;
+        if (total !== null && skip >= total) break;
+        if (limit !== undefined && collected.length >= limit) break;
+      } catch (err) {
+        logger.error('listProducts fetch failed', { skip, want, err: String(err) });
+        await this.backoff.wait();
+        if (this.backoff.attempts > 3) {
+          this.sessionEstablished = false;
+        }
+        throw err;
+      }
+    }
+
+    logger.info('listProducts complete', { collected: collected.length, total });
+    return limit === undefined ? collected : collected.slice(0, limit);
+  }
+
+  /**
+   * Fetch the full store directory from Alko's /api/stores endpoint.
+   *
+   * Unlike the product API this one is a single GET with the whole list
+   * (~360 stores, <600 kB) so no pagination is needed. Run it from the
+   * browser context so Incapsula cookies apply.
+   */
+  async listStores(): Promise<AlkoApiStore[]> {
+    if (!this.sessionEstablished) {
+      await this.init();
+      await this.establishSession();
+    }
+
+    await this.rateLimiter.throttleWithJitter();
+    logger.info('Fetching store directory');
+
+    try {
+      const body = (await this.page!.evaluate(`
+        (async () => {
+          const r = await fetch('/api/stores');
+          if (!r.ok) throw new Error('API returned ' + r.status);
+          return r.json();
+        })()
+      `)) as StoresApiResponse;
+      this.backoff.reset();
+      const stores = body.data ?? [];
+      logger.info('Stores fetched', { count: stores.length });
+      return stores;
+    } catch (err) {
+      logger.error('listStores fetch failed', { err: String(err) });
+      await this.backoff.wait();
+      if (this.backoff.attempts > 3) {
         this.sessionEstablished = false;
       }
       throw err;
@@ -260,7 +455,7 @@ export class AlkoScraper {
     logger.info('Scraping product details', { productId });
 
     try {
-      await this.page!.goto(`https://www.alko.fi/tuotteet/${productId}`, {
+      await this.page!.goto(`${config.alkoBaseUrl}/tuotteet/${productId}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       });
@@ -343,7 +538,7 @@ export class AlkoScraper {
     } catch (err) {
       logger.error('Product details scrape failed', { productId, err: String(err) });
       await this.backoff.wait();
-      if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+      if (this.backoff.attempts > 3) {
         this.sessionEstablished = false;
       }
       return null;
@@ -380,8 +575,8 @@ let scraperInstance: AlkoScraper | null = null;
 
 /**
  * Shared scraper instance for the current CLI invocation. We intentionally
- * keep a singleton so multiple consumers (e.g. `availability` now, and
- * `show --enrich` later in Vaihe 6) can reuse the same browser.
+ * keep a singleton so multiple consumers (e.g. `availability` and `show
+ * --enrich`) can reuse the same browser within one CLI run.
  */
 export function getAlkoScraper(): AlkoScraper {
   if (!scraperInstance) scraperInstance = new AlkoScraper();

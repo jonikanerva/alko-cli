@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { SqliteService } from '../db/sqlite.js';
 import { getDbPath } from '../utils/paths.js';
 import { detectFormat, formatJson, formatProductsTable } from '../utils/formatter.js';
+import { parsePositiveInt, parseSortOrder } from '../utils/cli-parse.js';
 import type { ProductSearchFilters, ProductSearchOptions, SmokinessLevel } from '../types/product.js';
 
 interface ListOptions {
@@ -14,17 +15,12 @@ interface ListOptions {
   minAlcohol?: string;
   maxAlcohol?: string;
   assortment?: string;
-  specialGroup?: string;
   beerType?: string;
   minSmokiness?: string;
   maxSmokiness?: string;
-  organic?: boolean;
-  vegan?: boolean;
-  new?: boolean;
   sort?: string;
   order?: string;
   limit?: string;
-  offset?: string;
   json?: boolean;
   table?: boolean;
 }
@@ -61,22 +57,20 @@ export function registerListCommand(program: Command): void {
     .option('--min-alcohol <pct>', 'Minimum alcohol percentage')
     .option('--max-alcohol <pct>', 'Maximum alcohol percentage')
     .option('--assortment <name>', 'vakiovalikoima|tilausvalikoima|erikoiserä|kausituote')
-    .option('--special-group <name>', 'Luomu | Vegaaneille soveltuva tuote | ...')
     .option('--beer-type <name>', 'Beer type (ipa, lager, stout & porter, ...)')
     .option('--min-smokiness <0-4>', 'Whiskey smokiness lower bound')
     .option('--max-smokiness <0-4>', 'Whiskey smokiness upper bound')
-    .option('--organic', 'Only Luomu products')
-    .option('--vegan', 'Only products marked vegan-suitable')
-    .option('--new', 'Only new arrivals (Uutuus)')
-    .option('--sort <field>', 'Sort by: name|price|alcohol|pricePerLiter', 'name')
+    .option(
+      '--sort <field>',
+      'Sort by: name|price|alcohol|pricePerLiter (default: relevance when --query is given, else name)'
+    )
     .option('--order <asc|desc>', 'Sort order', 'asc')
-    .option('--limit <n>', 'Max results', '20')
-    .option('--offset <n>', 'Pagination offset', '0')
+    .option('--limit <n>', 'Cap the result count (default: no limit — pipe to head/less to trim)')
     .option('--json', 'Emit JSON (default when stdout is piped)')
     .option('--table', 'Force human-readable table (default when stdout is a TTY)')
     .addHelpText(
       'after',
-      `\nExamples:\n  alko list --country Ranska --max-price 20\n  alko list --query "cabernet sauvignon" --type punaviinit\n  alko list --type oluet --beer-type ipa --min-alcohol 6\n  alko list --organic --country Italia --sort price\n  alko list --query "syrah" --limit 50 --json | jq '.products[].name'\n`
+      `\nExamples:\n  alko list --country Ranska --max-price 20\n  alko list --query "cabernet sauvignon" --type punaviinit\n  alko list --type oluet --beer-type ipa --min-alcohol 6\n  alko list --country Italia --sort price\n  alko list --query "syrah" --json | jq '.products[].name'\n`
     )
     .action((opts: ListOptions) => {
       const db = new SqliteService(getDbPath());
@@ -91,11 +85,7 @@ export function registerListCommand(program: Command): void {
           minAlcohol: parseNumber(opts.minAlcohol, 'min-alcohol'),
           maxAlcohol: parseNumber(opts.maxAlcohol, 'max-alcohol'),
           assortment: opts.assortment,
-          specialGroup: opts.specialGroup,
           beerType: opts.beerType,
-          isNew: opts.new ? true : undefined,
-          isOrganic: opts.organic ? true : undefined,
-          isVegan: opts.vegan ? true : undefined,
           minSmokiness: parseSmokiness(opts.minSmokiness, 'min-smokiness'),
           maxSmokiness: parseSmokiness(opts.maxSmokiness, 'max-smokiness'),
         };
@@ -106,13 +96,12 @@ export function registerListCommand(program: Command): void {
         if (opts.sort && !sortBy) {
           throw new Error(`Invalid --sort: ${opts.sort}. Use: name|price|alcohol|pricePerLiter`);
         }
-        const sortOrder = opts.order === 'desc' ? 'desc' : 'asc';
+        const sortOrder = parseSortOrder(opts.order);
 
         const options: ProductSearchOptions = {
           sortBy,
           sortOrder,
-          limit: parseNumber(opts.limit, 'limit') ?? 20,
-          offset: parseNumber(opts.offset, 'offset') ?? 0,
+          limit: opts.limit === undefined ? undefined : parsePositiveInt(opts.limit, '--limit'),
         };
 
         const result = db.searchProducts(filters, options);

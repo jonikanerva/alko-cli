@@ -11,11 +11,11 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/cli.js",
     "dev": "tsx src/cli.ts",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:all": "npm run typecheck && npm run lint && npm run test:run && npm run build",
+    "test:all": "npm run typecheck && npm run lint && npm run build && npm run test:run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
@@ -33,7 +33,6 @@
   "dependencies": {
     "commander": "^13.0.0",
     "playwright": "^1.49.0",
-    "xlsx": "^0.18.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {

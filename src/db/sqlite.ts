@@ -11,7 +11,7 @@ import { logger } from '../utils/logger.js';
 
 /**
  * SqliteService — local SQLite storage layer.
- * Replaces the original FirestoreService with a synchronous, file-backed store.
+ * Synchronous, file-backed via Node's built-in `node:sqlite` module.
  */
 export class SqliteService {
   private readonly db: DatabaseSync;
@@ -139,6 +139,14 @@ export class SqliteService {
   /**
    * Upsert products in a single transaction.
    * Preserves created_at for existing products, bumps updated_at to now.
+   *
+   * The UPDATE path only rewrites columns the Alko search API is known
+   * to supply (price, type, country, alcohol, notes, etc.). Columns the
+   * API does not expose — producer, ean, subtype, special_group, region,
+   * label_notes, and all enrichment / beer-spec columns — are left alone,
+   * so a value populated out-of-band (e.g. via `alko show --enrich`)
+   * survives a re-sync. INSERT still writes every column because a
+   * brand-new row has nothing to preserve.
    */
   upsertProducts(products: Product[]): { added: number; updated: number } {
     if (products.length === 0) return { added: 0, updated: 0 };
@@ -165,13 +173,14 @@ export class SqliteService {
     );
     const update = this.db.prepare(
       `UPDATE products SET
-        name = ?, producer = ?, ean = ?, price = ?, price_per_liter = ?,
-        bottle_size = ?, packaging_type = ?, closure_type = ?, type = ?,
-        subtype = ?, special_group = ?, beer_type = ?, sort_code = ?,
-        country = ?, region = ?, vintage = ?, grapes = ?, label_notes = ?,
-        description = ?, notes = ?, alcohol_percentage = ?, acids = ?,
-        sugar = ?, energy = ?, original_gravity = ?, color_ebc = ?,
-        bitterness_ebu = ?, assortment = ?, is_new = ?, updated_at = ?
+        name = ?,
+        price = ?, price_per_liter = ?,
+        bottle_size = ?, packaging_type = ?, closure_type = ?,
+        type = ?, beer_type = ?,
+        country = ?, vintage = ?, grapes = ?,
+        description = ?, notes = ?,
+        alcohol_percentage = ?, assortment = ?,
+        updated_at = ?
        WHERE id = ?`
     );
 
@@ -185,34 +194,20 @@ export class SqliteService {
         if (existsRow) {
           update.run(
             p.name,
-            p.producer,
-            p.ean,
             p.price,
             p.pricePerLiter,
             p.bottleSize,
             p.packagingType,
             p.closureType,
             p.type,
-            p.subtype,
-            p.specialGroup,
             p.beerType,
-            p.sortCode,
             p.country,
-            p.region,
             p.vintage,
             p.grapes,
-            p.labelNotes,
             p.description,
             p.notes,
             p.alcoholPercentage,
-            p.acids,
-            p.sugar,
-            p.energy,
-            p.originalGravity,
-            p.colorEBC,
-            p.bitternessEBU,
             p.assortment,
-            p.isNew ? 1 : 0,
             p.updatedAt,
             p.id
           );
@@ -273,6 +268,50 @@ export class SqliteService {
   }
 
   /**
+   * Remove products whose IDs are not in `keepIds`. Returns the deletion
+   * count. Intended for full catalog syncs — callers MUST NOT invoke this
+   * after a partial (`--limit`) sync or every run would delete the whole
+   * tail of the catalog.
+   */
+  deleteProductsNotIn(keepIds: Set<string>): number {
+    if (keepIds.size === 0) return 0;
+    const allIds = this.db.prepare('SELECT id FROM products').all() as { id: string }[];
+    const doomed = allIds.filter((row) => !keepIds.has(row.id));
+    if (doomed.length === 0) return 0;
+    const stmt = this.db.prepare('DELETE FROM products WHERE id = ?');
+    this.db.exec('BEGIN');
+    try {
+      for (const { id } of doomed) stmt.run(id);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+    return doomed.length;
+  }
+
+  /**
+   * Remove stores whose IDs are not in `keepIds`. Same contract as
+   * {@link deleteProductsNotIn}: full-sync callers only.
+   */
+  deleteStoresNotIn(keepIds: Set<string>): number {
+    if (keepIds.size === 0) return 0;
+    const allIds = this.db.prepare('SELECT id FROM stores').all() as { id: string }[];
+    const doomed = allIds.filter((row) => !keepIds.has(row.id));
+    if (doomed.length === 0) return 0;
+    const stmt = this.db.prepare('DELETE FROM stores WHERE id = ?');
+    this.db.exec('BEGIN');
+    try {
+      for (const { id } of doomed) stmt.run(id);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+    return doomed.length;
+  }
+
+  /**
    * Patch an existing product's enriched fields (tasteProfile, foodPairings, etc.).
    */
   updateProductEnrichment(
@@ -324,7 +363,16 @@ export class SqliteService {
     filters: ProductSearchFilters,
     options: ProductSearchOptions = {}
   ): ProductSearchResult {
-    const { sortBy = 'name', sortOrder = 'asc', limit = 20, offset = 0 } = options;
+    const { sortBy, sortOrder = 'asc', limit } = options;
+    // SQLite treats `LIMIT -1` as "no upper bound" — honour it when the
+    // caller did not pass a limit so the CLI returns the full match set.
+    const sqlLimit = limit === undefined ? -1 : limit;
+
+    // Tracking whether the caller *explicitly* requested a sort matters for
+    // the FTS branch: when there is no text query, `name` ASC is the natural
+    // default; with a text query we want relevance unless the user asked
+    // otherwise. `sortBy === undefined` distinguishes those two cases.
+    const userRequestedSort = sortBy !== undefined;
 
     const useFts = !!filters.query && filters.query.trim().length > 0;
     const whereClauses: string[] = [];
@@ -347,21 +395,9 @@ export class SqliteService {
       whereClauses.push('p.assortment = ?');
       whereParams.push(filters.assortment);
     }
-    if (filters.specialGroup) {
-      whereClauses.push('p.special_group = ?');
-      whereParams.push(filters.specialGroup);
-    } else if (filters.isOrganic) {
-      whereClauses.push("p.special_group = 'Luomu'");
-    } else if (filters.isVegan) {
-      whereClauses.push("p.special_group = 'Vegaaneille soveltuva tuote'");
-    }
     if (filters.beerType) {
       whereClauses.push('p.beer_type = ?');
       whereParams.push(filters.beerType);
-    }
-    if (filters.isNew !== undefined) {
-      whereClauses.push('p.is_new = ?');
-      whereParams.push(filters.isNew ? 1 : 0);
     }
     if (filters.minPrice !== undefined) {
       whereClauses.push('p.price >= ?');
@@ -388,7 +424,7 @@ export class SqliteService {
       whereParams.push(filters.maxSmokiness);
     }
 
-    const sortColumn = this.sortColumnForSqlite(sortBy);
+    const sortColumn = this.sortColumnForSqlite(sortBy ?? 'name');
     const order = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 
     let rows: Record<string, unknown>[];
@@ -401,7 +437,7 @@ export class SqliteService {
       const ftsWhere = ['products_fts MATCH ?', ...whereClauses];
       const whereSql = ftsWhere.join(' AND ');
 
-      // Count first (for pagination total)
+      // Count first so the caller can show "X shown / Y matches" hints
       const countStmt = this.db.prepare(
         `SELECT COUNT(*) AS c
            FROM products_fts
@@ -413,7 +449,11 @@ export class SqliteService {
         | undefined;
       total = countRow ? Number(countRow.c) : 0;
 
-      // Then fetch page — order by custom relevance (LIKE bonus) + fts rank
+      // Two ORDER BY modes: honour the user's explicit --sort when given,
+      // otherwise fall back to relevance (custom LIKE bonus + FTS rank).
+      const orderSql = userRequestedSort
+        ? `ORDER BY ${sortColumn} ${order}, p.name COLLATE NOCASE ASC`
+        : 'ORDER BY __bonus DESC, __rank ASC, p.name COLLATE NOCASE ASC';
       const selectStmt = this.db.prepare(
         `SELECT p.*,
            (CASE
@@ -426,8 +466,8 @@ export class SqliteService {
          FROM products_fts
          JOIN products p ON p.rowid = products_fts.rowid
          WHERE ${whereSql}
-         ORDER BY __bonus DESC, __rank ASC, p.name COLLATE NOCASE ASC
-         LIMIT ? OFFSET ?`
+         ${orderSql}
+         LIMIT ?`
       );
       rows = selectStmt.all(
         queryLower,
@@ -435,8 +475,7 @@ export class SqliteService {
         queryLower,
         ftsQuery,
         ...(whereParams as never[]),
-        limit,
-        offset
+        sqlLimit
       ) as Record<string, unknown>[];
     } else {
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -448,17 +487,14 @@ export class SqliteService {
       const selectStmt = this.db.prepare(
         `SELECT p.* FROM products p ${whereSql}
          ORDER BY ${sortColumn} ${order}, p.name COLLATE NOCASE ASC
-         LIMIT ? OFFSET ?`
+         LIMIT ?`
       );
-      rows = selectStmt.all(...(whereParams as never[]), limit, offset) as Record<string, unknown>[];
+      rows = selectStmt.all(...(whereParams as never[]), sqlLimit) as Record<string, unknown>[];
     }
 
     return {
       products: rows.map((r) => this.rowToProduct(r)),
       total,
-      limit,
-      offset,
-      hasMore: offset + rows.length < total,
     };
   }
 

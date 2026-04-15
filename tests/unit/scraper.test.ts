@@ -23,10 +23,8 @@ function apiItem(overrides: Partial<AvailabilityApiResponse> = {}): Availability
 
 describe('parseAvailabilityApiResponse', () => {
   it('returns an empty array for non-array input', () => {
-    expect(parseAvailabilityApiResponse(null as unknown as AvailabilityApiResponse[])).toEqual([]);
-    expect(parseAvailabilityApiResponse(undefined as unknown as AvailabilityApiResponse[])).toEqual(
-      []
-    );
+    expect(parseAvailabilityApiResponse(null)).toEqual([]);
+    expect(parseAvailabilityApiResponse(undefined)).toEqual([]);
   });
 
   it('filters out stores with zero stock', () => {
@@ -77,11 +75,7 @@ describe('parseAvailabilityApiResponse', () => {
 
   it('defaults missing string fields to empty strings', () => {
     const [store] = parseAvailabilityApiResponse([
-      apiItem({
-        address: undefined as unknown as string,
-        city: undefined as unknown as string,
-        postalCode: undefined as unknown as string,
-      }),
+      apiItem({ address: undefined, city: undefined, postalCode: undefined }),
     ]);
     expect(store.address).toBe('');
     expect(store.city).toBe('');

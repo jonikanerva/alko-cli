@@ -93,7 +93,7 @@ describe('formatJson', () => {
     expect(formatJson({ a: 1 })).toBe('{"a":1}\n');
   });
 
-  it('preserves null values (unlike the MCP tools which strip them)', () => {
+  it('preserves null values verbatim', () => {
     expect(formatJson({ a: null })).toBe('{"a":null}\n');
   });
 });
@@ -103,38 +103,37 @@ describe('formatProductsTable', () => {
     const result: ProductSearchResult = {
       products: [],
       total: 0,
-      limit: 20,
-      offset: 0,
-      hasMore: false,
     };
     expect(formatProductsTable(result)).toBe('No matching products.\n');
   });
 
-  it('includes header, separator, and row counts', () => {
+  it('includes header, separator and a "X shown / Y matches" hint when --limit truncated', () => {
     const result: ProductSearchResult = {
       products: [product(), product({ id: '000002', name: 'Another Wine' })],
       total: 5,
-      limit: 20,
-      offset: 0,
-      hasMore: true,
     };
     const out = formatProductsTable(result);
     expect(out).toContain('ID');
-    expect(out).toContain('Nimi');
+    expect(out).toContain('Name');
     expect(out).toContain('Test Wine');
     expect(out).toContain('Another Wine');
-    expect(out).toMatch(/2 shown · 5 matches · next page: --offset 2/);
+    expect(out).toMatch(/2 shown · 5 matches \(use --limit to change\)\n$/);
+  });
+
+  it('omits the truncation hint when shown == total', () => {
+    const result: ProductSearchResult = {
+      products: [product(), product({ id: '000002', name: 'Another Wine' })],
+      total: 2,
+    };
+    expect(formatProductsTable(result)).toMatch(/2 matches\n$/);
   });
 
   it('uses singular form for exactly one match', () => {
     const result: ProductSearchResult = {
       products: [product()],
       total: 1,
-      limit: 20,
-      offset: 0,
-      hasMore: false,
     };
-    expect(formatProductsTable(result)).toMatch(/1 shown · 1 match\n$/);
+    expect(formatProductsTable(result)).toMatch(/1 match\n$/);
   });
 });
 
