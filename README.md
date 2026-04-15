@@ -96,7 +96,8 @@ Filter flags: `--query`, `--type`, `--country`, `--region`, `--min-price`,
 `--max-price`, `--min-alcohol`, `--max-alcohol`, `--assortment`,
 `--special-group`, `--beer-type`, `--min-smokiness`, `--max-smokiness`,
 `--organic`, `--vegan`, `--new`. Sort with `--sort name|price|alcohol|pricePerLiter`
-and `--order asc|desc`. Paginate with `--limit N --offset K`.
+and `--order asc|desc`. Use `--limit N` to cap the result count; the
+default returns every match (pipe to `head` / `less` for ad hoc trimming).
 
 ### `alko show`
 

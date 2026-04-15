@@ -111,10 +111,11 @@ export function formatProductsTable(result: ProductSearchResult): string {
     .join('\n');
 
   const shown = result.products.length;
-  const nextHint = result.hasMore
-    ? ` · next page: --offset ${result.offset + shown}`
-    : '';
-  const footer = `\n\n  ${shown} shown · ${result.total} match${result.total === 1 ? '' : 'es'}${nextHint}\n`;
+  const matchesWord = `match${result.total === 1 ? '' : 'es'}`;
+  const footer =
+    shown === result.total
+      ? `\n\n  ${result.total} ${matchesWord}\n`
+      : `\n\n  ${shown} shown · ${result.total} ${matchesWord} (use --limit to change)\n`;
 
   return [header, sep, body].join('\n') + footer;
 }

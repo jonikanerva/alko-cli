@@ -158,14 +158,12 @@ export interface ProductSearchFilters {
 export interface ProductSearchOptions {
   sortBy?: 'price' | 'name' | 'alcohol' | 'pricePerLiter';
   sortOrder?: 'asc' | 'desc';
+  /** Cap the result set. Omit to return every match. */
   limit?: number;
-  offset?: number;
 }
 
 export interface ProductSearchResult {
   products: Product[];
+  /** Total matches before any --limit is applied. */
   total: number;
-  limit: number;
-  offset: number;
-  hasMore: boolean;
 }

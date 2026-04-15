@@ -324,7 +324,10 @@ export class SqliteService {
     filters: ProductSearchFilters,
     options: ProductSearchOptions = {}
   ): ProductSearchResult {
-    const { sortBy = 'name', sortOrder = 'asc', limit = 20, offset = 0 } = options;
+    const { sortBy = 'name', sortOrder = 'asc', limit } = options;
+    // SQLite treats `LIMIT -1` as "no upper bound" — honour it when the
+    // caller did not pass a limit so the CLI returns the full match set.
+    const sqlLimit = limit === undefined ? -1 : limit;
 
     const useFts = !!filters.query && filters.query.trim().length > 0;
     const whereClauses: string[] = [];
@@ -401,7 +404,7 @@ export class SqliteService {
       const ftsWhere = ['products_fts MATCH ?', ...whereClauses];
       const whereSql = ftsWhere.join(' AND ');
 
-      // Count first (for pagination total)
+      // Count first so the caller can show "X shown / Y matches" hints
       const countStmt = this.db.prepare(
         `SELECT COUNT(*) AS c
            FROM products_fts
@@ -427,7 +430,7 @@ export class SqliteService {
          JOIN products p ON p.rowid = products_fts.rowid
          WHERE ${whereSql}
          ORDER BY __bonus DESC, __rank ASC, p.name COLLATE NOCASE ASC
-         LIMIT ? OFFSET ?`
+         LIMIT ?`
       );
       rows = selectStmt.all(
         queryLower,
@@ -435,8 +438,7 @@ export class SqliteService {
         queryLower,
         ftsQuery,
         ...(whereParams as never[]),
-        limit,
-        offset
+        sqlLimit
       ) as Record<string, unknown>[];
     } else {
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -448,17 +450,14 @@ export class SqliteService {
       const selectStmt = this.db.prepare(
         `SELECT p.* FROM products p ${whereSql}
          ORDER BY ${sortColumn} ${order}, p.name COLLATE NOCASE ASC
-         LIMIT ? OFFSET ?`
+         LIMIT ?`
       );
-      rows = selectStmt.all(...(whereParams as never[]), limit, offset) as Record<string, unknown>[];
+      rows = selectStmt.all(...(whereParams as never[]), sqlLimit) as Record<string, unknown>[];
     }
 
     return {
       products: rows.map((r) => this.rowToProduct(r)),
       total,
-      limit,
-      offset,
-      hasMore: offset + rows.length < total,
     };
   }
 

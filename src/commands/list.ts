@@ -24,7 +24,6 @@ interface ListOptions {
   sort?: string;
   order?: string;
   limit?: string;
-  offset?: string;
   json?: boolean;
   table?: boolean;
 }
@@ -70,13 +69,12 @@ export function registerListCommand(program: Command): void {
     .option('--new', 'Only new arrivals (Uutuus)')
     .option('--sort <field>', 'Sort by: name|price|alcohol|pricePerLiter', 'name')
     .option('--order <asc|desc>', 'Sort order', 'asc')
-    .option('--limit <n>', 'Max results', '20')
-    .option('--offset <n>', 'Pagination offset', '0')
+    .option('--limit <n>', 'Cap the result count (default: no limit — pipe to head/less to trim)')
     .option('--json', 'Emit JSON (default when stdout is piped)')
     .option('--table', 'Force human-readable table (default when stdout is a TTY)')
     .addHelpText(
       'after',
-      `\nExamples:\n  alko list --country Ranska --max-price 20\n  alko list --query "cabernet sauvignon" --type punaviinit\n  alko list --type oluet --beer-type ipa --min-alcohol 6\n  alko list --organic --country Italia --sort price\n  alko list --query "syrah" --limit 50 --json | jq '.products[].name'\n`
+      `\nExamples:\n  alko list --country Ranska --max-price 20\n  alko list --query "cabernet sauvignon" --type punaviinit\n  alko list --type oluet --beer-type ipa --min-alcohol 6\n  alko list --organic --country Italia --sort price\n  alko list --query "syrah" --json | jq '.products[].name'\n`
     )
     .action((opts: ListOptions) => {
       const db = new SqliteService(getDbPath());
@@ -111,8 +109,7 @@ export function registerListCommand(program: Command): void {
         const options: ProductSearchOptions = {
           sortBy,
           sortOrder,
-          limit: parseNumber(opts.limit, 'limit') ?? 20,
-          offset: parseNumber(opts.offset, 'offset') ?? 0,
+          limit: parseNumber(opts.limit, 'limit'),
         };
 
         const result = db.searchProducts(filters, options);
