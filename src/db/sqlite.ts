@@ -139,6 +139,14 @@ export class SqliteService {
   /**
    * Upsert products in a single transaction.
    * Preserves created_at for existing products, bumps updated_at to now.
+   *
+   * The UPDATE path only rewrites columns the Alko search API is known
+   * to supply (price, type, country, alcohol, etc.). Columns the API
+   * does not expose — producer, ean, subtype, special_group, region,
+   * notes, and all enrichment / beer-spec columns — are left alone, so
+   * a prior Excel sync or `alko show --enrich` pass survives a re-sync.
+   * INSERT still writes every column because a brand-new row has
+   * nothing to preserve.
    */
   upsertProducts(products: Product[]): { added: number; updated: number } {
     if (products.length === 0) return { added: 0, updated: 0 };
@@ -165,13 +173,14 @@ export class SqliteService {
     );
     const update = this.db.prepare(
       `UPDATE products SET
-        name = ?, producer = ?, ean = ?, price = ?, price_per_liter = ?,
-        bottle_size = ?, packaging_type = ?, closure_type = ?, type = ?,
-        subtype = ?, special_group = ?, beer_type = ?, sort_code = ?,
-        country = ?, region = ?, vintage = ?, grapes = ?, label_notes = ?,
-        description = ?, notes = ?, alcohol_percentage = ?, acids = ?,
-        sugar = ?, energy = ?, original_gravity = ?, color_ebc = ?,
-        bitterness_ebu = ?, assortment = ?, is_new = ?, updated_at = ?
+        name = ?,
+        price = ?, price_per_liter = ?,
+        bottle_size = ?, packaging_type = ?, closure_type = ?,
+        type = ?, beer_type = ?,
+        country = ?, vintage = ?, grapes = ?,
+        description = ?,
+        alcohol_percentage = ?, assortment = ?,
+        updated_at = ?
        WHERE id = ?`
     );
 
@@ -185,34 +194,19 @@ export class SqliteService {
         if (existsRow) {
           update.run(
             p.name,
-            p.producer,
-            p.ean,
             p.price,
             p.pricePerLiter,
             p.bottleSize,
             p.packagingType,
             p.closureType,
             p.type,
-            p.subtype,
-            p.specialGroup,
             p.beerType,
-            p.sortCode,
             p.country,
-            p.region,
             p.vintage,
             p.grapes,
-            p.labelNotes,
             p.description,
-            p.notes,
             p.alcoholPercentage,
-            p.acids,
-            p.sugar,
-            p.energy,
-            p.originalGravity,
-            p.colorEBC,
-            p.bitternessEBU,
             p.assortment,
-            p.isNew ? 1 : 0,
             p.updatedAt,
             p.id
           );

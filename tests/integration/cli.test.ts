@@ -147,4 +147,58 @@ describe('alko CLI end-to-end', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/not found/);
   });
+
+  it('re-upserting an API-style payload preserves API-unowned fields', () => {
+    // Simulates the real-world flow: catalog was seeded with full data
+    // (producer, region, specialGroup, isNew, tasteProfile from --enrich),
+    // then `alko update` runs a resync where the Alko search API does NOT
+    // expose those columns. The mapper returns empty/null defaults for
+    // them, but the DB UPDATE path must keep the existing values.
+    const preserveDb = join(tmpDir, 'preserve.db');
+    const original = makeProduct({
+      id: '111111',
+      name: 'Old Name',
+      producer: 'Legacy Producer',
+      ean: '6411100001234',
+      region: 'Bordeaux',
+      specialGroup: 'Luomu',
+      isNew: true,
+      price: 10,
+      tasteProfile: 'Original enrichment taste profile',
+    });
+    seedTestCatalog(preserveDb, [original]);
+
+    const apiResync = makeProduct({
+      id: '111111',
+      name: 'New Name From API',
+      price: 25,
+      type: 'valkoviinit',
+      country: 'Italia',
+      // Fields the Alko search API does not expose — mapper sets defaults:
+      producer: '',
+      ean: '',
+      region: null,
+      specialGroup: null,
+      isNew: false,
+      tasteProfile: null,
+    });
+    seedTestCatalog(preserveDb, [apiResync]);
+
+    const out = runCli(['show', '111111', '--json'], { ALKO_DB_PATH: preserveDb });
+    const product = JSON.parse(out.trim());
+
+    // API-owned columns: updated
+    expect(product.name).toBe('New Name From API');
+    expect(product.price).toBe(25);
+    expect(product.type).toBe('valkoviinit');
+    expect(product.country).toBe('Italia');
+
+    // API-unowned columns: preserved
+    expect(product.producer).toBe('Legacy Producer');
+    expect(product.ean).toBe('6411100001234');
+    expect(product.region).toBe('Bordeaux');
+    expect(product.specialGroup).toBe('Luomu');
+    expect(product.isNew).toBe(true);
+    expect(product.tasteProfile).toBe('Original enrichment taste profile');
+  });
 });
