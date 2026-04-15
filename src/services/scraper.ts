@@ -320,7 +320,7 @@ export class AlkoScraper {
 
       // After repeated failures, drop the session so the next call
       // re-establishes it from scratch.
-      if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+      if (this.backoff.attempts > 3) {
         this.sessionEstablished = false;
       }
       throw err;
@@ -385,7 +385,7 @@ export class AlkoScraper {
       } catch (err) {
         logger.error('listProducts fetch failed', { skip, want, err: String(err) });
         await this.backoff.wait();
-        if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+        if (this.backoff.attempts > 3) {
           this.sessionEstablished = false;
         }
         throw err;
@@ -427,7 +427,7 @@ export class AlkoScraper {
     } catch (err) {
       logger.error('listStores fetch failed', { err: String(err) });
       await this.backoff.wait();
-      if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+      if (this.backoff.attempts > 3) {
         this.sessionEstablished = false;
       }
       throw err;
@@ -535,7 +535,7 @@ export class AlkoScraper {
     } catch (err) {
       logger.error('Product details scrape failed', { productId, err: String(err) });
       await this.backoff.wait();
-      if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+      if (this.backoff.attempts > 3) {
         this.sessionEstablished = false;
       }
       return null;

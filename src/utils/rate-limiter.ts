@@ -47,6 +47,14 @@ export class ExponentialBackoff {
     this.factor = options.factor || 2;
   }
 
+  /**
+   * Number of consecutive failures accumulated since the last {@link reset}.
+   * Callers use this to decide when to tear down their session / escalate.
+   */
+  get attempts(): number {
+    return this.attempt;
+  }
+
   getNextDelay(): number {
     const delay = Math.min(this.baseMs * Math.pow(this.factor, this.attempt), this.maxMs);
     this.attempt++;
