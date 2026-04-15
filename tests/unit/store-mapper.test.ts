@@ -52,6 +52,24 @@ describe('mapAlkoApiStore', () => {
     expect(s?.openingHoursTomorrow).toBe('9-21');
   });
 
+  it('matches opening hours on the Europe/Helsinki calendar day, not UTC', () => {
+    // 00:30 in Helsinki during EEST (UTC+3) == 21:30 the previous day UTC.
+    // The API labels its openHours with Finland-local dates, so "today"
+    // from the caller's perspective is the Helsinki civil date.
+    const helsinkiJustAfterMidnight = new Date('2026-04-15T00:30:00+03:00');
+    const s = mapAlkoApiStore(
+      raw({
+        openHours: [
+          { hours: '9-20', date: '2026-04-15' }, // the "today" for a Finnish user
+          { hours: '9-21', date: '2026-04-16' },
+        ],
+      }),
+      helsinkiJustAfterMidnight
+    );
+    expect(s?.openingHoursToday).toBe('9-20');
+    expect(s?.openingHoursTomorrow).toBe('9-21');
+  });
+
   it('leaves hours null when no matching date is in openHours', () => {
     const s = mapAlkoApiStore(
       raw({
