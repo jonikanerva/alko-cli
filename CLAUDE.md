@@ -22,7 +22,9 @@ alko-cli/
 │   ├── services/
 │   │   ├── product-sync.ts      # listProducts → mapAlkoApiProduct → upsert
 │   │   ├── product-mapper.ts    # Pure mapper: AlkoApiProduct → Product
-│   │   └── scraper.ts           # Playwright scraper (listProducts + availability + enrich)
+│   │   ├── store-sync.ts        # listStores → mapAlkoApiStore → upsert
+│   │   ├── store-mapper.ts      # Pure mapper: AlkoApiStore → Store
+│   │   └── scraper.ts           # Playwright scraper (listProducts + listStores + availability + enrich)
 │   ├── db/
 │   │   ├── schema.ts            # SQL DDL + FTS5 virtual table
 │   │   └── sqlite.ts            # SqliteService (node:sqlite)
@@ -239,6 +241,10 @@ npm run test:all             # typecheck + lint + test:run + build
    no longer published by Alko — see `scripts/sniff-product-api.ts` for
    the audit trail and to re-discover the endpoint if Alko changes it.
 
+   `alko update` also syncs the store directory in the same Playwright
+   session via `AlkoScraper.listStores()` (GET `/api/stores`, a single
+   ~600 kB envelope — no pagination needed).
+
 6. **Availability uses Alko's JSON API.** The scraper calls
    `/api/product-api/availability/{productId}` from inside the Playwright
    page context (so session cookies and Incapsula tokens are applied
@@ -250,9 +256,15 @@ npm run test:all             # typecheck + lint + test:run + build
    these; `alko status` reads them.
 
 8. **Stderr-only logger.** `utils/logger.ts` writes to stderr so commands
-   can safely pipe machine-readable JSON on stdout (`LOG_LEVEL=debug
-   alko list --json | jq` still works). Matches the `alko-mcp`
-   convention for the same reason.
+   can safely pipe machine-readable JSON on stdout. Default level is
+   `warn` so routine CLI runs stay quiet; `--debug` (wired in `cli.ts`
+   via a `preAction` hook on the root command) flips it to `debug` for
+   the current invocation. `LOG_LEVEL` env var still works for scripts.
+
+9. **Suppressing node:sqlite's ExperimentalWarning.** The CLI shebang is
+   `#!/usr/bin/env -S node --no-warnings=ExperimentalWarning` — Node 24's
+   targeted `--no-warnings=<name>` silences the SQLite experimental notice
+   without hiding genuine warnings.
 
 ## Gotchas
 

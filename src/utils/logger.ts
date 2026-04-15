@@ -2,9 +2,12 @@
  * Minimal stderr-only logger for CLI usage.
  * stdout is reserved for the CLI's own output (JSON/table), so all
  * diagnostic messages go to stderr where they can be filtered with 2>/dev/null.
+ *
+ * Default level is `warn` so routine CLI runs stay silent. Flip it with
+ * `--debug` (wired in cli.ts) or the `LOG_LEVEL` env var for scripts.
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LEVELS: Record<LogLevel, number> = {
   debug: 10,
@@ -13,13 +16,21 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-function resolveLevel(): LogLevel {
-  const raw = (process.env.LOG_LEVEL || 'info').toLowerCase();
-  if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') return raw;
-  return 'info';
+function parseLevel(raw: string | undefined): LogLevel | null {
+  if (!raw) return null;
+  const v = raw.toLowerCase();
+  return v === 'debug' || v === 'info' || v === 'warn' || v === 'error' ? v : null;
 }
 
-const activeLevel = LEVELS[resolveLevel()];
+let activeLevel = LEVELS[parseLevel(process.env.LOG_LEVEL) ?? 'warn'];
+
+/**
+ * Override the active log level at runtime. Used by the CLI root to honour
+ * `--debug` before command actions start emitting output.
+ */
+export function setLogLevel(level: LogLevel): void {
+  activeLevel = LEVELS[level];
+}
 
 function write(level: LogLevel, message: string, context?: unknown): void {
   if (LEVELS[level] < activeLevel) return;

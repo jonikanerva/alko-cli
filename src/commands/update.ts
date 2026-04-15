@@ -3,6 +3,7 @@ import { SqliteService } from '../db/sqlite.js';
 import { getDbPath } from '../utils/paths.js';
 import { config } from '../config.js';
 import { syncProducts } from '../services/product-sync.js';
+import { syncStores } from '../services/store-sync.js';
 import { getAlkoScraper, registerBrowserCleanup } from '../services/scraper.js';
 import { logger } from '../utils/logger.js';
 
@@ -57,13 +58,18 @@ export function registerUpdateCommand(program: Command): void {
       const scraper = getAlkoScraper();
 
       try {
-        const result = await syncProducts(db, scraper, { limit, pageSize });
+        const products = await syncProducts(db, scraper, { limit, pageSize });
+        const stores = await syncStores(db, scraper);
+
+        const summary = { ...products, stores };
 
         if (opts.json) {
-          process.stdout.write(JSON.stringify(result) + '\n');
+          process.stdout.write(JSON.stringify(summary) + '\n');
         } else {
           process.stderr.write(
-            `Updated: ${result.productsAdded} added, ${result.productsUpdated} updated, ${result.invalidCount} invalid (${result.durationMs}ms).\n`
+            `Updated products: ${products.productsAdded} added, ${products.productsUpdated} updated, ${products.invalidCount} invalid.\n` +
+              `Updated stores:   ${stores.storesAdded} added, ${stores.storesUpdated} updated, ${stores.invalidCount} invalid.\n` +
+              `Total: ${products.durationMs}ms.\n`
           );
         }
       } catch (err) {

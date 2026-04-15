@@ -100,6 +100,33 @@ export interface ListProductsOptions {
 }
 
 /**
+ * Raw store shape returned by GET /api/stores on alko.fi.
+ *
+ * Like AlkoApiProduct, this was captured from live traffic — see
+ * scripts/sniff-product-api.ts (and follow-up stores probe) for the
+ * audit trail. Only fields the mapper consumes are declared explicitly.
+ */
+export interface AlkoApiStore {
+  id: string;
+  name?: string;
+  name_sv?: string;
+  address?: string;
+  postalCode?: string;
+  postOffice?: string;
+  city?: string;
+  openHours?: Array<{ hours: string; date: string }>;
+  openDays?: string[];
+  outletType?: string;
+  longitude?: number;
+  latitude?: number;
+  [key: string]: unknown;
+}
+
+interface StoresApiResponse {
+  data?: AlkoApiStore[];
+}
+
+/**
  * Classify a stock count into a coarse status bucket. Matches the
  * conventions used by the Alko MCP server's scraper for consistency.
  */
@@ -366,6 +393,44 @@ export class AlkoScraper {
 
     logger.info('listProducts complete', { collected: collected.length, total });
     return limit === undefined ? collected : collected.slice(0, limit);
+  }
+
+  /**
+   * Fetch the full store directory from Alko's /api/stores endpoint.
+   *
+   * Unlike the product API this one is a single GET with the whole list
+   * (~360 stores, <600 kB) so no pagination is needed. Run it from the
+   * browser context so Incapsula cookies apply.
+   */
+  async listStores(): Promise<AlkoApiStore[]> {
+    if (!this.sessionEstablished) {
+      await this.init();
+      await this.establishSession();
+    }
+
+    await this.rateLimiter.throttleWithJitter();
+    logger.info('Fetching store directory');
+
+    try {
+      const body = (await this.page!.evaluate(`
+        (async () => {
+          const r = await fetch('/api/stores');
+          if (!r.ok) throw new Error('API returned ' + r.status);
+          return r.json();
+        })()
+      `)) as StoresApiResponse;
+      this.backoff.reset();
+      const stores = body.data ?? [];
+      logger.info('Stores fetched', { count: stores.length });
+      return stores;
+    } catch (err) {
+      logger.error('listStores fetch failed', { err: String(err) });
+      await this.backoff.wait();
+      if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+        this.sessionEstablished = false;
+      }
+      throw err;
+    }
   }
 
   /**
