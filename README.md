@@ -147,7 +147,7 @@ Environment variables:
 | `ALKO_BASE_URL`            | Base URL used by the scraper.                                   | `https://www.alko.fi`                                                                               |
 | `ALKO_UPDATE_STALENESS_MS` | How old `last_sync` can be before `alko update` actually runs.  | 24 h                                                                                                |
 | `SCRAPE_RATE_LIMIT_MS`     | Minimum interval between scraper requests.                      | 2000                                                                                                |
-| `LOG_LEVEL`                | `debug` \| `info` \| `warn` \| `error`.                         | `info`                                                                                              |
+| `LOG_LEVEL`                | `debug` \| `info` \| `warn` \| `error`.                         | `warn` (use `alko --debug <cmd>` or `LOG_LEVEL=info` to see progress logs)                          |
 
 ## Data layout
 

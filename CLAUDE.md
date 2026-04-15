@@ -74,7 +74,8 @@ Run before every commit and PR — all must pass, no exceptions:
 npm run test:all
 ```
 
-This runs: `typecheck → lint → test:run → build`.
+This runs: `typecheck → lint → build → test:run`. Build is ahead of
+the test run so integration tests always spawn a fresh `dist/cli.js`.
 
 Integration tests need `dist/cli.js` to exist; the suite auto-builds if
 missing, but `npm run build` first speeds up the first run.
