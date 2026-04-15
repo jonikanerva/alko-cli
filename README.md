@@ -87,14 +87,14 @@ scraper is rate-limited to respect the site.
 alko list --country Ranska --max-price 20
 alko list --query "cabernet sauvignon" --type punaviinit
 alko list --type oluet --beer-type ipa --min-alcohol 6
-alko list --organic --country Italia --sort price
+alko list --country Italia --sort price
 alko list --query "syrah" --limit 50 --json | jq '.products[].name'
 ```
 
 Filter flags: `--query`, `--type`, `--country`, `--region`, `--min-price`,
 `--max-price`, `--min-alcohol`, `--max-alcohol`, `--assortment`,
-`--special-group`, `--beer-type`, `--min-smokiness`, `--max-smokiness`,
-`--organic`, `--vegan`, `--new`. Sort with `--sort name|price|alcohol|pricePerLiter`
+`--beer-type`, `--min-smokiness`, `--max-smokiness`.
+Sort with `--sort name|price|alcohol|pricePerLiter`
 and `--order asc|desc`. Use `--limit N` to cap the result count; the
 default returns every match (pipe to `head` / `less` for ad hoc trimming).
 
