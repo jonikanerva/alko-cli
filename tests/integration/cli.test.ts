@@ -105,6 +105,36 @@ describe('alko CLI end-to-end', () => {
     expect(products[0].id).toBe('000004');
   });
 
+  it('honours --sort on a text query (relevance is only the default)', () => {
+    // Before the fix, FTS search forced relevance order and silently
+    // ignored --sort. Seed a small dedicated catalog so we can assert
+    // the ordering deterministically.
+    const sortDb = join(tmpDir, 'sort.db');
+    seedTestCatalog(sortDb, [
+      makeProduct({ id: '000101', name: 'Chianti A', country: 'Italia', price: 10 }),
+      makeProduct({ id: '000102', name: 'Chianti B', country: 'Italia', price: 25 }),
+      makeProduct({ id: '000103', name: 'Chianti C', country: 'Italia', price: 15 }),
+    ]);
+
+    const descOut = runCli(
+      ['list', '--query', 'chianti', '--sort', 'price', '--order', 'desc', '--json'],
+      { ALKO_DB_PATH: sortDb }
+    );
+    const descPrices = JSON.parse(descOut.trim()).products.map(
+      (p: { price: number }) => p.price
+    );
+    expect(descPrices).toEqual([25, 15, 10]);
+
+    const ascOut = runCli(
+      ['list', '--query', 'chianti', '--sort', 'price', '--json'],
+      { ALKO_DB_PATH: sortDb }
+    );
+    const ascPrices = JSON.parse(ascOut.trim()).products.map(
+      (p: { price: number }) => p.price
+    );
+    expect(ascPrices).toEqual([10, 15, 25]);
+  });
+
   it('applies price bounds', () => {
     const out = runCli(
       ['list', '--min-price', '15', '--max-price', '30', '--json'],

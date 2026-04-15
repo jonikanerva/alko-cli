@@ -318,10 +318,16 @@ export class SqliteService {
     filters: ProductSearchFilters,
     options: ProductSearchOptions = {}
   ): ProductSearchResult {
-    const { sortBy = 'name', sortOrder = 'asc', limit } = options;
+    const { sortBy, sortOrder = 'asc', limit } = options;
     // SQLite treats `LIMIT -1` as "no upper bound" — honour it when the
     // caller did not pass a limit so the CLI returns the full match set.
     const sqlLimit = limit === undefined ? -1 : limit;
+
+    // Tracking whether the caller *explicitly* requested a sort matters for
+    // the FTS branch: when there is no text query, `name` ASC is the natural
+    // default; with a text query we want relevance unless the user asked
+    // otherwise. `sortBy === undefined` distinguishes those two cases.
+    const userRequestedSort = sortBy !== undefined;
 
     const useFts = !!filters.query && filters.query.trim().length > 0;
     const whereClauses: string[] = [];
@@ -385,7 +391,7 @@ export class SqliteService {
       whereParams.push(filters.maxSmokiness);
     }
 
-    const sortColumn = this.sortColumnForSqlite(sortBy);
+    const sortColumn = this.sortColumnForSqlite(sortBy ?? 'name');
     const order = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 
     let rows: Record<string, unknown>[];
@@ -410,7 +416,11 @@ export class SqliteService {
         | undefined;
       total = countRow ? Number(countRow.c) : 0;
 
-      // Then fetch page — order by custom relevance (LIKE bonus) + fts rank
+      // Two ORDER BY modes: honour the user's explicit --sort when given,
+      // otherwise fall back to relevance (custom LIKE bonus + FTS rank).
+      const orderSql = userRequestedSort
+        ? `ORDER BY ${sortColumn} ${order}, p.name COLLATE NOCASE ASC`
+        : 'ORDER BY __bonus DESC, __rank ASC, p.name COLLATE NOCASE ASC';
       const selectStmt = this.db.prepare(
         `SELECT p.*,
            (CASE
@@ -423,7 +433,7 @@ export class SqliteService {
          FROM products_fts
          JOIN products p ON p.rowid = products_fts.rowid
          WHERE ${whereSql}
-         ORDER BY __bonus DESC, __rank ASC, p.name COLLATE NOCASE ASC
+         ${orderSql}
          LIMIT ?`
       );
       rows = selectStmt.all(

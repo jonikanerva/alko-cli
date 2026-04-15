@@ -67,7 +67,10 @@ export function registerListCommand(program: Command): void {
     .option('--organic', 'Only Luomu products')
     .option('--vegan', 'Only products marked vegan-suitable')
     .option('--new', 'Only new arrivals (Uutuus)')
-    .option('--sort <field>', 'Sort by: name|price|alcohol|pricePerLiter', 'name')
+    .option(
+      '--sort <field>',
+      'Sort by: name|price|alcohol|pricePerLiter (default: relevance when --query is given, else name)'
+    )
     .option('--order <asc|desc>', 'Sort order', 'asc')
     .option('--limit <n>', 'Cap the result count (default: no limit — pipe to head/less to trim)')
     .option('--json', 'Emit JSON (default when stdout is piped)')
