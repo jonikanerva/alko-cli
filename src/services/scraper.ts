@@ -43,6 +43,63 @@ export interface AvailabilityApiResponse {
 }
 
 /**
+ * One product entry returned by Alko's internal search API
+ *   POST /api/product-api/search or /api/search/product?lang=fi
+ *
+ * The shape is captured from live traffic — not a documented contract.
+ * See scripts/sniff-product-api.ts for the full audit trail.
+ *
+ * Only the fields actually consumed by the mapper are declared; the
+ * index signature accepts any extra keys Alko adds in the future without
+ * forcing the raw type to track them.
+ */
+export interface AlkoApiProduct {
+  id: string;
+  name: string;
+  price?: number | string;
+  abv?: number | string;
+  volume?: number | string;
+  countryName?: string;
+  country?: string;
+  mainGroupName?: string[];
+  productGroupName?: string[];
+  beerStyleName?: string[];
+  tasteStyleName?: string[];
+  grapes?: string[];
+  packageSizes?: string[];
+  packageTypes?: string[];
+  closures?: string[];
+  selectionTypes?: string[];
+  certificateId?: string[];
+  taste?: string | null;
+  additionalInfo?: string | null;
+  webshopStock?: number | null;
+  onlineAvailability?: boolean;
+  statusId?: string;
+  [key: string]: unknown;
+}
+
+interface SearchApiResponse {
+  '@odata.count'?: number;
+  value?: AlkoApiProduct[];
+}
+
+/**
+ * Options for {@link AlkoScraper.listProducts}.
+ *
+ * - `limit` caps the total number of products returned (useful for
+ *   development / smoke-testing).
+ * - `pageSize` controls how many products are fetched per API call.
+ *   Clamped to [1, 1000]; the endpoint rejects larger pages.
+ * - `onProgress` is called after each page with the running total.
+ */
+export interface ListProductsOptions {
+  limit?: number;
+  pageSize?: number;
+  onProgress?: (fetched: number, total: number | null) => void;
+}
+
+/**
  * Classify a stock count into a coarse status bucket. Matches the
  * conventions used by the Alko MCP server's scraper for consistency.
  */
@@ -240,6 +297,75 @@ export class AlkoScraper {
       }
       throw err;
     }
+  }
+
+  /**
+   * Fetch the full product catalog via Alko's internal search API.
+   *
+   * Calls POST /api/search/product?lang=fi with {top, skip} payloads from
+   * within the established browser session (so Incapsula tokens apply).
+   * Paginates until the reported @odata.count is reached, the API returns
+   * a short page, or `limit` is hit.
+   *
+   * Returns the raw Alko product objects; call `mapAlkoApiProduct` on each
+   * to project into the CLI's internal `Product` shape.
+   */
+  async listProducts(opts: ListProductsOptions = {}): Promise<AlkoApiProduct[]> {
+    if (!this.sessionEstablished) {
+      await this.init();
+      await this.establishSession();
+    }
+
+    const pageSize = Math.max(1, Math.min(opts.pageSize ?? 500, 1000));
+    const limit = opts.limit;
+    const collected: AlkoApiProduct[] = [];
+    let skip = 0;
+    let total: number | null = null;
+
+    for (;;) {
+      const want = limit === undefined ? pageSize : Math.min(pageSize, limit - collected.length);
+      if (want <= 0) break;
+
+      await this.rateLimiter.throttleWithJitter();
+      logger.info('listProducts page', { skip, want });
+
+      try {
+        const page = (await this.page!.evaluate(`
+          (async () => {
+            const r = await fetch('/api/search/product?lang=fi', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ top: ${want}, skip: ${skip} }),
+            });
+            if (!r.ok) throw new Error('API returned ' + r.status);
+            return r.json();
+          })()
+        `)) as SearchApiResponse;
+
+        if (total === null && typeof page['@odata.count'] === 'number') {
+          total = page['@odata.count'];
+        }
+        const batch = page.value ?? [];
+        collected.push(...batch);
+        this.backoff.reset();
+        opts.onProgress?.(collected.length, total);
+
+        if (batch.length < want) break;
+        skip += want;
+        if (total !== null && skip >= total) break;
+        if (limit !== undefined && collected.length >= limit) break;
+      } catch (err) {
+        logger.error('listProducts fetch failed', { skip, want, err: String(err) });
+        await this.backoff.wait();
+        if ((this.backoff as unknown as { attempt: number }).attempt > 3) {
+          this.sessionEstablished = false;
+        }
+        throw err;
+      }
+    }
+
+    logger.info('listProducts complete', { collected: collected.length, total });
+    return limit === undefined ? collected : collected.slice(0, limit);
   }
 
   /**

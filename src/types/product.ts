@@ -59,42 +59,6 @@ export type PackagingType =
   | 'muu';
 
 /**
- * Raw product data from Excel file (Finnish column names)
- */
-export interface AlkoExcelRow {
-  Numero: string;
-  Nimi: string;
-  Valmistaja: string;
-  Pullokoko: string;
-  Hinta: number;
-  Litrahinta: number;
-  Uutuus: string | null;
-  Hinnastojärjestyskoodi: number;
-  Tyyppi: string;
-  Alatyyppi: string | null;
-  Erityisryhmä: string | null;
-  Oluttyyppi: string | null;
-  Valmistusmaa: string;
-  Alue: string | null;
-  Vuosikerta: number | null;
-  Etikettimerkintöjä: string | null;
-  Huomautus: string | null;
-  Rypäleet: string | null;
-  Luonnehdinta: string | null;
-  Pakkaustyyppi: string | null;
-  Suljentatyyppi: string | null;
-  'Alkoholi-%': number;
-  'Hapot g/l': number | null;
-  'Sokeri g/l': number | null;
-  'Kantavierrep-%': number | null;
-  'Väri EBC': number | null;
-  'Katkerot EBU': number | null;
-  'Energia kcal/100 ml': number | null;
-  Valikoima: string;
-  EAN: string;
-}
-
-/**
  * Product entity stored in SQLite.
  * Timestamps are ISO 8601 strings (e.g. "2026-04-15T10:23:15.000Z")
  * because node:sqlite does not natively store Date objects.
