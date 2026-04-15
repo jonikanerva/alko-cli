@@ -142,8 +142,8 @@ Environment variables:
 
 | Variable                   | Purpose                                                         | Default                                                                                             |
 | -------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `ALKO_DB_PATH`             | Override the SQLite file location (great for tests).            | `$XDG_DATA_HOME/alko-cli/alko.db` or `~/.config/alko-cli/alko.db`                                  |
-| `XDG_DATA_HOME`            | Base directory for the catalog.                                 | `~/.config`                                                                                         |
+| `ALKO_DB_PATH`             | Override the SQLite file location (great for tests).            | `~/.alko-cli/alko.db` (or `$XDG_DATA_HOME/alko-cli/alko.db` when `XDG_DATA_HOME` is set)            |
+| `XDG_DATA_HOME`            | When set, opts into the XDG layout under `$XDG_DATA_HOME/alko-cli/`. | unset                                                                                          |
 | `ALKO_BASE_URL`            | Base URL used by the scraper.                                   | `https://www.alko.fi`                                                                               |
 | `ALKO_UPDATE_STALENESS_MS` | How old `last_sync` can be before `alko update` actually runs.  | 24 h                                                                                                |
 | `SCRAPE_RATE_LIMIT_MS`     | Minimum interval between scraper requests.                      | 2000                                                                                                |
@@ -151,10 +151,18 @@ Environment variables:
 
 ## Data layout
 
+By default everything alko-cli owns lives under `~/.alko-cli/`:
+
 ```
-$XDG_DATA_HOME/alko-cli/alko.db      # SQLite database (WAL journal)
-$XDG_DATA_HOME/alko-cli/alko.db-wal  # Write-ahead log, managed by SQLite
+~/.alko-cli/alko.db      # SQLite database (WAL journal)
+~/.alko-cli/alko.db-wal  # Write-ahead log, managed by SQLite
+~/.alko-cli/alko.db-shm  # Shared-memory file, managed by SQLite
 ```
+
+Setting `XDG_DATA_HOME` relocates the directory to
+`$XDG_DATA_HOME/alko-cli/`. Setting `ALKO_DB_PATH` overrides the DB file
+location entirely (useful for tests or when you want the DB outside
+`$HOME`).
 
 ## Development
 

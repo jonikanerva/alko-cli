@@ -32,7 +32,7 @@ alko-cli/
 │   └── utils/
 │       ├── formatter.ts         # Table / JSON output helpers (isTTY autodetect)
 │       ├── logger.ts            # Stderr-only leveled logger
-│       ├── paths.ts             # DB path resolution (XDG-aware, ALKO_DB_PATH)
+│       ├── paths.ts             # DB path resolution (~/.alko-cli by default, XDG_DATA_HOME opt-in, ALKO_DB_PATH override)
 │       └── rate-limiter.ts      # Scraper throttling + exponential backoff
 ├── tests/
 │   ├── helpers/seed-db.ts       # Seed temp SQLite for integration tests

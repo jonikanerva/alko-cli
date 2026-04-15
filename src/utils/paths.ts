@@ -4,13 +4,21 @@ import { mkdirSync } from 'node:fs';
 
 /**
  * Return the directory where alko-cli stores its data.
- * Honors XDG_DATA_HOME, defaults to ~/.config/alko-cli on macOS/Linux.
+ *
+ * Resolution order:
+ *   1. $XDG_DATA_HOME (if set and non-blank) → $XDG_DATA_HOME/alko-cli
+ *      — opt-in for users who follow the XDG Base Directory spec.
+ *   2. Default → ~/.alko-cli
+ *      — matches the dotfile convention used by aws, docker, cargo,
+ *        nvm, ollama, etc. Keeps everything alko-cli owns in one
+ *        discoverable place under $HOME.
+ *
  * Creates the directory if it doesn't exist.
  */
 export function getDataDir(): string {
   const xdg = process.env.XDG_DATA_HOME;
-  const base = xdg && xdg.trim() ? xdg : join(homedir(), '.config');
-  const dir = join(base, 'alko-cli');
+  const dir =
+    xdg && xdg.trim() ? join(xdg, 'alko-cli') : join(homedir(), '.alko-cli');
   mkdirSync(dir, { recursive: true });
   return dir;
 }
