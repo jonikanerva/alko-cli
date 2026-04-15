@@ -178,6 +178,23 @@ describe('alko CLI end-to-end', () => {
     expect(result.stderr).toMatch(/not found/);
   });
 
+  it('re-upserting an API-style payload updates API-owned notes', () => {
+    // Regression: the UPDATE path used to skip `notes` even though the
+    // mapper sources it from `raw.additionalInfo`, so changes to the
+    // upstream note never reached existing rows.
+    const notesDb = join(tmpDir, 'notes.db');
+    seedTestCatalog(notesDb, [
+      makeProduct({ id: '000201', name: 'Noteworthy', notes: 'note-1' }),
+    ]);
+    seedTestCatalog(notesDb, [
+      makeProduct({ id: '000201', name: 'Noteworthy', notes: 'note-2' }),
+    ]);
+
+    const out = runCli(['show', '000201', '--json'], { ALKO_DB_PATH: notesDb });
+    const product = JSON.parse(out.trim());
+    expect(product.notes).toBe('note-2');
+  });
+
   it('re-upserting an API-style payload preserves API-unowned fields', () => {
     // Simulates the real-world flow: catalog was seeded with full data
     // (producer, region, specialGroup, isNew, tasteProfile from --enrich),

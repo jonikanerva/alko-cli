@@ -178,7 +178,7 @@ export class SqliteService {
         bottle_size = ?, packaging_type = ?, closure_type = ?,
         type = ?, beer_type = ?,
         country = ?, vintage = ?, grapes = ?,
-        description = ?,
+        description = ?, notes = ?,
         alcohol_percentage = ?, assortment = ?,
         updated_at = ?
        WHERE id = ?`
@@ -205,6 +205,7 @@ export class SqliteService {
             p.vintage,
             p.grapes,
             p.description,
+            p.notes,
             p.alcoholPercentage,
             p.assortment,
             p.updatedAt,
