@@ -61,15 +61,28 @@ export function registerUpdateCommand(program: Command): void {
         const products = await syncProducts(db, scraper, { limit, pageSize });
         const stores = await syncStores(db, scraper);
 
-        const summary = { ...products, stores };
+        // Stamp last_sync only now — after BOTH syncs succeeded, and
+        // only on a full (unlimited) run. A --limit run or a run that
+        // threw partway through would otherwise trick the next `alko
+        // update` into "data is fresh, skipping" for 24 hours.
+        const isFullSync = limit === undefined;
+        if (isFullSync) {
+          const nowIso = new Date().toISOString();
+          db.setMeta('last_sync', nowIso);
+          db.setMeta('last_sync_source', 'api');
+          db.setMeta('last_sync_product_count', String(products.productsProcessed));
+        }
+
+        const summary = { ...products, stores, partial: !isFullSync };
 
         if (opts.json) {
           process.stdout.write(JSON.stringify(summary) + '\n');
         } else {
+          const partialNote = isFullSync ? '' : ' (partial — --limit set, staleness clock not reset)';
           process.stderr.write(
             `Updated products: ${products.productsAdded} added, ${products.productsUpdated} updated, ${products.invalidCount} invalid.\n` +
               `Updated stores:   ${stores.storesAdded} added, ${stores.storesUpdated} updated, ${stores.invalidCount} invalid.\n` +
-              `Total: ${products.durationMs}ms.\n`
+              `Total: ${products.durationMs}ms${partialNote}.\n`
           );
         }
       } catch (err) {

@@ -64,11 +64,13 @@ export async function syncProducts(
   logger.info(`Upserting ${valid.length} products to SQLite`);
   const { added, updated } = db.upsertProducts(valid);
 
-  const nowIso = new Date().toISOString();
-  db.setMeta('last_sync', nowIso);
-  db.setMeta('last_sync_source', 'api');
-  db.setMeta('last_sync_product_count', String(valid.length));
-
+  // Deliberately NOT writing last_sync / last_sync_source /
+  // last_sync_product_count here — the update command is responsible
+  // for stamping those only after BOTH product and store syncs have
+  // finished successfully, and only on a full (unlimited) sync. A
+  // premature write would cause the next `alko update` to be skipped
+  // by the 24 h staleness guard even when the previous run was
+  // truncated by --limit or cut short by a store-sync failure.
   const result: SyncResult = {
     success: true,
     productsProcessed: valid.length,
