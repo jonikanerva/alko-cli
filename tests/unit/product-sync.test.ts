@@ -96,4 +96,21 @@ describe('syncProducts', () => {
     const upserted = db.upsertProducts.mock.calls[0][0] as Product[];
     expect(upserted.map((p) => p.id)).toEqual(['111']);
   });
+
+  it('keeps raw upstream ids in keepIds even for mapper-invalid entries', async () => {
+    // Regression: a malformed entry used to be excluded from keepIds,
+    // which then caused `deleteProductsNotIn` to wipe a still-listed
+    // row. The delete set must reflect what the API reported.
+    const db = makeDb();
+    const scraper = makeScraper([
+      sampleApiProduct, // valid, id "111"
+      { id: '222', name: '', price: 10 } as AlkoApiProduct, // invalid
+    ]);
+
+    await syncProducts(db as unknown as SqliteService, scraper as unknown as AlkoScraper, {});
+
+    const keepIds = db.deleteProductsNotIn.mock.calls[0][0] as Set<string>;
+    expect(keepIds.has('111')).toBe(true);
+    expect(keepIds.has('222')).toBe(true);
+  });
 });

@@ -38,7 +38,15 @@ export async function syncStores(
   // The stores endpoint always returns the full directory; if a store is
   // gone from the API response, it has closed and should leave the local
   // catalog too.
-  const keepIds = new Set(valid.map((s) => s.id));
+  //
+  // Build keepIds from the *raw* response so a malformed payload (which
+  // the mapper would reject) does not cause a still-listed store to be
+  // dropped from the local catalog.
+  const keepIds = new Set(
+    rawStores
+      .map((r) => (typeof r?.id === 'string' ? r.id.trim() : ''))
+      .filter((id) => id.length > 0)
+  );
   const removed = db.deleteStoresNotIn(keepIds);
   if (removed > 0) logger.info(`Removed ${removed} stores no longer in directory`);
 

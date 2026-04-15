@@ -67,10 +67,18 @@ export async function syncProducts(
 
   // Mirror-delete products the API no longer advertises — but only on a
   // full sync. A --limit run would otherwise delete most of the catalog.
+  //
+  // `keepIds` is built from the *raw* upstream response, not from the
+  // mapper-validated subset, so that a single malformed entry does not
+  // cause the local row to be deleted even though Alko still lists it.
   let removed = 0;
   const isFullSync = opts.limit === undefined;
   if (isFullSync) {
-    const keepIds = new Set(valid.map((p) => p.id));
+    const keepIds = new Set(
+      rawProducts
+        .map((r) => (typeof r?.id === 'string' ? r.id.trim() : ''))
+        .filter((id) => id.length > 0)
+    );
     removed = db.deleteProductsNotIn(keepIds);
     if (removed > 0) logger.info(`Removed ${removed} products no longer in catalog`);
   }
