@@ -134,7 +134,12 @@ export interface Product {
 export type SmokinessLevel = 0 | 1 | 2 | 3 | 4;
 
 /**
- * Product search filters
+ * Product search filters.
+ *
+ * `specialGroup` / `isNew` / `isOrganic` / `isVegan` columns exist in the
+ * SQLite schema but the Alko JSON API does not populate them, so we do
+ * not expose them as CLI filters — they would silently match nothing on
+ * an API-seeded catalog.
  */
 export interface ProductSearchFilters {
   query?: string;
@@ -146,11 +151,7 @@ export interface ProductSearchFilters {
   minAlcohol?: number;
   maxAlcohol?: number;
   assortment?: string;
-  specialGroup?: string;
   beerType?: string;
-  isNew?: boolean;
-  isOrganic?: boolean;
-  isVegan?: boolean;
   minSmokiness?: SmokinessLevel;
   maxSmokiness?: SmokinessLevel;
 }

@@ -14,13 +14,9 @@ interface ListOptions {
   minAlcohol?: string;
   maxAlcohol?: string;
   assortment?: string;
-  specialGroup?: string;
   beerType?: string;
   minSmokiness?: string;
   maxSmokiness?: string;
-  organic?: boolean;
-  vegan?: boolean;
-  new?: boolean;
   sort?: string;
   order?: string;
   limit?: string;
@@ -60,13 +56,9 @@ export function registerListCommand(program: Command): void {
     .option('--min-alcohol <pct>', 'Minimum alcohol percentage')
     .option('--max-alcohol <pct>', 'Maximum alcohol percentage')
     .option('--assortment <name>', 'vakiovalikoima|tilausvalikoima|erikoiserä|kausituote')
-    .option('--special-group <name>', 'Luomu | Vegaaneille soveltuva tuote | ...')
     .option('--beer-type <name>', 'Beer type (ipa, lager, stout & porter, ...)')
     .option('--min-smokiness <0-4>', 'Whiskey smokiness lower bound')
     .option('--max-smokiness <0-4>', 'Whiskey smokiness upper bound')
-    .option('--organic', 'Only Luomu products')
-    .option('--vegan', 'Only products marked vegan-suitable')
-    .option('--new', 'Only new arrivals (Uutuus)')
     .option(
       '--sort <field>',
       'Sort by: name|price|alcohol|pricePerLiter (default: relevance when --query is given, else name)'
@@ -77,7 +69,7 @@ export function registerListCommand(program: Command): void {
     .option('--table', 'Force human-readable table (default when stdout is a TTY)')
     .addHelpText(
       'after',
-      `\nExamples:\n  alko list --country Ranska --max-price 20\n  alko list --query "cabernet sauvignon" --type punaviinit\n  alko list --type oluet --beer-type ipa --min-alcohol 6\n  alko list --organic --country Italia --sort price\n  alko list --query "syrah" --json | jq '.products[].name'\n`
+      `\nExamples:\n  alko list --country Ranska --max-price 20\n  alko list --query "cabernet sauvignon" --type punaviinit\n  alko list --type oluet --beer-type ipa --min-alcohol 6\n  alko list --country Italia --sort price\n  alko list --query "syrah" --json | jq '.products[].name'\n`
     )
     .action((opts: ListOptions) => {
       const db = new SqliteService(getDbPath());
@@ -92,11 +84,7 @@ export function registerListCommand(program: Command): void {
           minAlcohol: parseNumber(opts.minAlcohol, 'min-alcohol'),
           maxAlcohol: parseNumber(opts.maxAlcohol, 'max-alcohol'),
           assortment: opts.assortment,
-          specialGroup: opts.specialGroup,
           beerType: opts.beerType,
-          isNew: opts.new ? true : undefined,
-          isOrganic: opts.organic ? true : undefined,
-          isVegan: opts.vegan ? true : undefined,
           minSmokiness: parseSmokiness(opts.minSmokiness, 'min-smokiness'),
           maxSmokiness: parseSmokiness(opts.maxSmokiness, 'max-smokiness'),
         };

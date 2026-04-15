@@ -394,21 +394,9 @@ export class SqliteService {
       whereClauses.push('p.assortment = ?');
       whereParams.push(filters.assortment);
     }
-    if (filters.specialGroup) {
-      whereClauses.push('p.special_group = ?');
-      whereParams.push(filters.specialGroup);
-    } else if (filters.isOrganic) {
-      whereClauses.push("p.special_group = 'Luomu'");
-    } else if (filters.isVegan) {
-      whereClauses.push("p.special_group = 'Vegaaneille soveltuva tuote'");
-    }
     if (filters.beerType) {
       whereClauses.push('p.beer_type = ?');
       whereParams.push(filters.beerType);
-    }
-    if (filters.isNew !== undefined) {
-      whereClauses.push('p.is_new = ?');
-      whereParams.push(filters.isNew ? 1 : 0);
     }
     if (filters.minPrice !== undefined) {
       whereClauses.push('p.price >= ?');
