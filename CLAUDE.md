@@ -34,8 +34,6 @@ alko-cli/
 │       ├── logger.ts            # Stderr-only leveled logger
 │       ├── paths.ts             # DB path resolution (XDG-aware, ALKO_DB_PATH)
 │       └── rate-limiter.ts      # Scraper throttling + exponential backoff
-├── scripts/
-│   └── sniff-product-api.ts     # Diagnostic: re-sniff Alko's product API shape
 ├── tests/
 │   ├── helpers/seed-db.ts       # Seed temp SQLite for integration tests
 │   ├── unit/                    # Pure-function tests (formatter, scraper parser, mapper)
@@ -220,9 +218,7 @@ npm run test:all             # typecheck + lint + test:run + build
    POSTs to `/api/search/product?lang=fi` from inside the Playwright page
    context (Incapsula tokens applied automatically). The endpoint is an
    Azure Cognitive Search style envelope (`@odata.count` + `value[]`) and
-   accepts `{top, skip}` pagination. The old Excel price list (xlsx) is
-   no longer published by Alko — see `scripts/sniff-product-api.ts` for
-   the audit trail and to re-discover the endpoint if Alko changes it.
+   accepts `{top, skip}` pagination.
 
    `alko update` also syncs the store directory in the same Playwright
    session via `AlkoScraper.listStores()` (GET `/api/stores`, a single
@@ -255,12 +251,13 @@ npm run test:all             # typecheck + lint + test:run + build
 - **Playwright's `waitForTimeout`** is intentionally used to wait for
   Incapsula's JS challenge to run; do not replace it with
   `waitForLoadState('networkidle')` — the page is deliberately noisy.
-- **Alko's product API is undocumented.** The endpoint
-  (`POST /api/search/product?lang=fi`) and its payload shape are reverse
-  engineered from live traffic. If `alko update` starts returning empty
-  or differently shaped data, re-run `scripts/sniff-product-api.ts` to
-  rediscover the call shape and update `AlkoScraper.listProducts()` +
-  `product-mapper.ts` accordingly.
+- **Alko's product API is undocumented.** The endpoints
+  (`POST /api/search/product?lang=fi`, `GET /api/stores`) and their
+  payload shapes are reverse engineered from live traffic. If `alko
+  update` starts returning empty or differently shaped data, open
+  DevTools on `alko.fi/tuotteet/tuotelistaus`, observe the real call,
+  and update `AlkoScraper.listProducts()` / `listStores()` and their
+  mappers accordingly.
 - **Fields the API does not expose** (producer, EAN, region, vintage as
   a column, acids, sugar, energy, EBC, EBU) are stored as empty / null
   in the catalog. `alko show --enrich` can fill some of these from the

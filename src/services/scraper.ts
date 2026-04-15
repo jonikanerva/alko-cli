@@ -44,10 +44,12 @@ export interface AvailabilityApiResponse {
 
 /**
  * One product entry returned by Alko's internal search API
- *   POST /api/product-api/search or /api/search/product?lang=fi
+ *   POST /api/search/product?lang=fi
+ *   body: {"top": N, "skip": M}
  *
  * The shape is captured from live traffic — not a documented contract.
- * See scripts/sniff-product-api.ts for the full audit trail.
+ * If Alko changes the payload, open DevTools on /tuotteet/tuotelistaus
+ * to re-observe the request/response and update this type + the mapper.
  *
  * Only the fields actually consumed by the mapper are declared; the
  * index signature accepts any extra keys Alko adds in the future without
@@ -102,9 +104,9 @@ export interface ListProductsOptions {
 /**
  * Raw store shape returned by GET /api/stores on alko.fi.
  *
- * Like AlkoApiProduct, this was captured from live traffic — see
- * scripts/sniff-product-api.ts (and follow-up stores probe) for the
- * audit trail. Only fields the mapper consumes are declared explicitly.
+ * Like AlkoApiProduct, this was captured from live traffic (DevTools on
+ * any alko.fi page) rather than a documented contract. Only fields the
+ * mapper consumes are declared explicitly.
  */
 export interface AlkoApiStore {
   id: string;
