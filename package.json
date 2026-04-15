@@ -1,0 +1,48 @@
+{
+  "name": "alko-cli",
+  "version": "0.1.0",
+  "description": "CLI tool for querying Alko.fi alcohol product catalog",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "alko": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:all": "npm run typecheck && npm run lint && npm run test:run && npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "alko",
+    "cli",
+    "alcohol",
+    "finland",
+    "ai-agent"
+  ],
+  "author": "Joni Kanerva",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^13.0.0",
+    "playwright": "^1.49.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.17.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^2.1.0"
+  }
+}
