@@ -10,8 +10,7 @@ const SEED_RUNNER = join(PROJECT_ROOT, 'tests', 'helpers', 'seed-runner.mjs');
 /**
  * Seed a temporary SQLite catalog with deterministic test products and
  * the meta rows the `status` command reads. Used by the integration test
- * suite in place of the old Excel fixture so end-to-end tests no longer
- * depend on a price-list parser.
+ * suite so end-to-end tests stay offline.
  *
  * Implementation note: seeding is delegated to a stand-alone Node script
  * (seed-runner.mjs) because Vitest's Vite-based loader cannot resolve

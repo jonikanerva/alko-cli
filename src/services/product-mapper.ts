@@ -6,10 +6,13 @@ import type { Product } from '../types/index.js';
  * entity, returning `null` when required fields (id / name / price) are
  * missing or obviously invalid.
  *
- * The API does not expose all fields the old Excel price list carried —
- * producer, EAN, explicit region/vintage columns, acids, sugar, energy,
- * beer-specific gravity / EBC / EBU — so those are left empty / null.
- * Vintage is best-effort parsed from the product name (e.g. "... 2020").
+ * The API does not expose some columns the schema still carries —
+ * producer, EAN, explicit region / vintage columns, acids, sugar,
+ * energy, beer-specific gravity / EBC / EBU — so those are left empty
+ * / null here. Vintage is best-effort parsed from the product name
+ * (e.g. "... 2020"). Any value that ends up in those columns via
+ * `alko show --enrich` is preserved on resync by the SqliteService
+ * UPDATE path (it skips columns the mapper doesn't own).
  *
  * Pure: no I/O, no logging. Safe to call on untrusted payloads.
  */
@@ -53,8 +56,8 @@ export function mapAlkoApiProduct(raw: AlkoApiProduct): Product | null {
     name: raw.name.trim(),
     // Fields the API does not expose. Defaults are only used for INSERT
     // of brand-new products; SqliteService.upsertProducts's UPDATE path
-    // does NOT write these back, so an earlier Excel / --enrich value
-    // survives a re-sync.
+    // does NOT write these back, so a value populated out-of-band (e.g.
+    // via `alko show --enrich`) survives a re-sync.
     producer: '',
     ean: '',
     subtype: null,

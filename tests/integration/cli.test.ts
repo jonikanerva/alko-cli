@@ -6,7 +6,7 @@
  * Running the compiled binary avoids Vite's module-graph concerns with the
  * experimental `node:sqlite` builtin — Node's own loader handles it at
  * runtime. The test catalog is materialised by `seedTestCatalog`
- * (tests/helpers/seed-db.ts) — no Excel parser, no network, no Playwright.
+ * (tests/helpers/seed-db.ts) — no network, no Playwright.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, execSync, spawnSync } from 'node:child_process';

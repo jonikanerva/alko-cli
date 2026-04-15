@@ -144,9 +144,9 @@ export class SqliteService {
    * to supply (price, type, country, alcohol, etc.). Columns the API
    * does not expose — producer, ean, subtype, special_group, region,
    * notes, and all enrichment / beer-spec columns — are left alone, so
-   * a prior Excel sync or `alko show --enrich` pass survives a re-sync.
-   * INSERT still writes every column because a brand-new row has
-   * nothing to preserve.
+   * a value populated out-of-band (e.g. via `alko show --enrich`)
+   * survives a re-sync. INSERT still writes every column because a
+   * brand-new row has nothing to preserve.
    */
   upsertProducts(products: Product[]): { added: number; updated: number } {
     if (products.length === 0) return { added: 0, updated: 0 };
