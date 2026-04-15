@@ -15,7 +15,7 @@
     "dev": "tsx src/cli.ts",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:all": "npm run typecheck && npm run lint && npm run test:run && npm run build",
+    "test:all": "npm run typecheck && npm run lint && npm run build && npm run test:run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
