@@ -72,15 +72,6 @@ export class SqliteService {
       labelNotes: (row.label_notes as string) ?? null,
       description: (row.description as string) ?? null,
       notes: (row.notes as string) ?? null,
-      tasteProfile: (row.taste_profile as string) ?? null,
-      usageTips: (row.usage_tips as string) ?? null,
-      servingSuggestion: (row.serving_suggestion as string) ?? null,
-      foodPairings: this.parseJsonArray(row.food_pairings),
-      certificates: this.parseJsonArray(row.certificates),
-      ingredients: (row.ingredients as string) ?? null,
-      smokiness:
-        row.smokiness === null || row.smokiness === undefined ? null : Number(row.smokiness),
-      smokinessLabel: (row.smokiness_label as string) ?? null,
       alcoholPercentage: Number(row.alcohol_percentage ?? 0),
       acids: row.acids === null || row.acids === undefined ? null : Number(row.acids),
       sugar: row.sugar === null || row.sugar === undefined ? null : Number(row.sugar),
@@ -99,17 +90,6 @@ export class SqliteService {
       updatedAt: (row.updated_at as string) ?? '',
       createdAt: (row.created_at as string) ?? '',
     };
-  }
-
-  private parseJsonArray(value: unknown): string[] | null {
-    if (value === null || value === undefined) return null;
-    if (typeof value !== 'string') return null;
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed.map(String) : null;
-    } catch {
-      return null;
-    }
   }
 
   // ============== Products ==============
@@ -143,10 +123,9 @@ export class SqliteService {
    * The UPDATE path only rewrites columns the Alko search API is known
    * to supply (price, type, country, alcohol, notes, etc.). Columns the
    * API does not expose — producer, ean, subtype, special_group, region,
-   * label_notes, and all enrichment / beer-spec columns — are left alone,
-   * so a value populated out-of-band (e.g. via `alko show --enrich`)
-   * survives a re-sync. INSERT still writes every column because a
-   * brand-new row has nothing to preserve.
+   * label_notes, and beer-spec columns — are left alone so out-of-band
+   * values survive a re-sync. INSERT still writes every column because
+   * a brand-new row has nothing to preserve.
    */
   upsertProducts(products: Product[]): { added: number; updated: number } {
     if (products.length === 0) return { added: 0, updated: 0 };
@@ -157,16 +136,14 @@ export class SqliteService {
         id, name, producer, ean, price, price_per_liter, bottle_size,
         packaging_type, closure_type, type, subtype, special_group, beer_type,
         sort_code, country, region, vintage, grapes, label_notes,
-        description, notes, taste_profile, usage_tips, serving_suggestion,
-        food_pairings, certificates, ingredients, smokiness, smokiness_label,
+        description, notes,
         alcohol_percentage, acids, sugar, energy, original_gravity, color_ebc,
         bitterness_ebu, assortment, is_new, updated_at, created_at
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
+        ?, ?,
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?
       )`
@@ -235,14 +212,6 @@ export class SqliteService {
             p.labelNotes,
             p.description,
             p.notes,
-            p.tasteProfile,
-            p.usageTips,
-            p.servingSuggestion,
-            p.foodPairings ? JSON.stringify(p.foodPairings) : null,
-            p.certificates ? JSON.stringify(p.certificates) : null,
-            p.ingredients,
-            p.smokiness,
-            p.smokinessLabel,
             p.alcoholPercentage,
             p.acids,
             p.sugar,
@@ -311,52 +280,6 @@ export class SqliteService {
     return doomed.length;
   }
 
-  /**
-   * Patch an existing product's enriched fields (tasteProfile, foodPairings, etc.).
-   */
-  updateProductEnrichment(
-    id: string,
-    patch: Partial<
-      Pick<
-        Product,
-        | 'tasteProfile'
-        | 'usageTips'
-        | 'servingSuggestion'
-        | 'foodPairings'
-        | 'certificates'
-        | 'ingredients'
-        | 'smokiness'
-        | 'smokinessLabel'
-      >
-    >
-  ): void {
-    const fields: string[] = [];
-    const values: unknown[] = [];
-    const push = (col: string, v: unknown) => {
-      fields.push(`${col} = ?`);
-      values.push(v);
-    };
-
-    if (patch.tasteProfile !== undefined) push('taste_profile', patch.tasteProfile);
-    if (patch.usageTips !== undefined) push('usage_tips', patch.usageTips);
-    if (patch.servingSuggestion !== undefined) push('serving_suggestion', patch.servingSuggestion);
-    if (patch.foodPairings !== undefined) push('food_pairings', patch.foodPairings ? JSON.stringify(patch.foodPairings) : null);
-    if (patch.certificates !== undefined) push('certificates', patch.certificates ? JSON.stringify(patch.certificates) : null);
-    if (patch.ingredients !== undefined) push('ingredients', patch.ingredients);
-    if (patch.smokiness !== undefined) push('smokiness', patch.smokiness);
-    if (patch.smokinessLabel !== undefined) push('smokiness_label', patch.smokinessLabel);
-
-    if (fields.length === 0) return;
-
-    fields.push('updated_at = ?');
-    values.push(new Date().toISOString());
-    values.push(id);
-
-    this.db
-      .prepare(`UPDATE products SET ${fields.join(', ')} WHERE id = ?`)
-      .run(...(values as never[]));
-  }
-
   // ============== Search ==============
 
   searchProducts(
@@ -415,15 +338,6 @@ export class SqliteService {
       whereClauses.push('p.alcohol_percentage <= ?');
       whereParams.push(filters.maxAlcohol);
     }
-    if (filters.minSmokiness !== undefined) {
-      whereClauses.push('p.smokiness >= ?');
-      whereParams.push(filters.minSmokiness);
-    }
-    if (filters.maxSmokiness !== undefined) {
-      whereClauses.push('p.smokiness <= ?');
-      whereParams.push(filters.maxSmokiness);
-    }
-
     const sortColumn = this.sortColumnForSqlite(sortBy ?? 'name');
     const order = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 

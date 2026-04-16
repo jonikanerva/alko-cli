@@ -14,7 +14,6 @@ interface StatusReport {
   products: {
     count: number;
     lastSync: string | null;
-    lastSyncSource: string | null;
     lastSyncProductCount: string | null;
     ageHours: number | null;
   };
@@ -34,7 +33,6 @@ function buildReport(db: SqliteService): StatusReport {
     products: {
       count: db.getProductCount(),
       lastSync,
-      lastSyncSource: db.getMeta('last_sync_source'),
       lastSyncProductCount: db.getMeta('last_sync_product_count'),
       ageHours,
     },
@@ -56,7 +54,6 @@ function renderText(r: StatusReport): string {
   lines.push('');
   row('Products', r.products.count);
   row('Last sync', r.products.lastSync);
-  row('Last sync source', r.products.lastSyncSource);
   row('Last sync count', r.products.lastSyncProductCount);
   row('Age (hours)', r.products.ageHours);
   lines.push('');

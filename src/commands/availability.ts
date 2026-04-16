@@ -9,6 +9,7 @@ import { logger } from '../utils/logger.js';
 
 interface AvailabilityOptions {
   city?: string;
+  store?: string;
   json?: boolean;
   table?: boolean;
 }
@@ -18,6 +19,7 @@ export function registerAvailabilityCommand(program: Command): void {
     .command('availability <productId>')
     .description('Check real-time store availability for a product on alko.fi')
     .option('--city <city>', 'Filter results by city (case-insensitive substring match)')
+    .option('--store <storeId>', 'Filter by store ID')
     .option('--json', 'Emit JSON (default when stdout is piped)')
     .option('--table', 'Force human-readable table (default when stdout is a TTY)')
     .addHelpText(
@@ -49,6 +51,9 @@ export function registerAvailabilityCommand(program: Command): void {
         if (opts.city) {
           const needle = opts.city.toLowerCase();
           stores = stores.filter((s) => s.city.toLowerCase().includes(needle));
+        }
+        if (opts.store) {
+          stores = stores.filter((s) => s.storeId === opts.store);
         }
 
         const filtered = { ...result, stores };
