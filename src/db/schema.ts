@@ -1,10 +1,9 @@
 /**
  * SQLite schema for alko-cli.
  * All timestamps are ISO 8601 strings (TEXT columns).
- * Array fields (foodPairings, certificates) are stored as JSON strings.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /**
  * Full schema DDL. Safe to run multiple times (IF NOT EXISTS everywhere).
@@ -32,14 +31,6 @@ CREATE TABLE IF NOT EXISTS products (
   label_notes      TEXT,
   description      TEXT,
   notes            TEXT,
-  taste_profile       TEXT,
-  usage_tips          TEXT,
-  serving_suggestion  TEXT,
-  food_pairings       TEXT,
-  certificates        TEXT,
-  ingredients         TEXT,
-  smokiness           INTEGER,
-  smokiness_label     TEXT,
   alcohol_percentage REAL NOT NULL DEFAULT 0,
   acids              REAL,
   sugar              REAL,

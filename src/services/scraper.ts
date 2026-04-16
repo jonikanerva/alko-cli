@@ -5,22 +5,6 @@ import { RateLimiter, ExponentialBackoff } from '../utils/rate-limiter.js';
 import type { StoreAvailability, ProductAvailabilityResult } from '../types/availability.js';
 
 /**
- * Enriched product data scraped from a product's public page.
- * Populated by {@link AlkoScraper.scrapeProductDetails}; any field can be
- * null/empty when the page layout doesn't expose that datum.
- */
-export interface EnrichedProductData {
-  tasteProfile: string | null;
-  usageTips: string | null;
-  servingSuggestion: string | null;
-  foodPairings: string[];
-  certificates: string[];
-  ingredients: string | null;
-  smokiness: number | null;
-  smokinessLabel: string | null;
-}
-
-/**
  * Response item from Alko's availability API:
  * GET /api/product-api/availability/{productId}
  *
@@ -434,114 +418,6 @@ export class AlkoScraper {
         this.sessionEstablished = false;
       }
       throw err;
-    }
-  }
-
-  /**
-   * Scrape enriched product data from a product's public page on alko.fi.
-   * The site renders taste/serving information into plain body text with
-   * well-known section headings, so we parse the innerText rather than
-   * fighting with dynamic React class names.
-   *
-   * Returns null on scrape failure so callers can degrade gracefully.
-   */
-  async scrapeProductDetails(productId: string): Promise<EnrichedProductData | null> {
-    if (!this.sessionEstablished) {
-      await this.init();
-      await this.establishSession();
-    }
-
-    await this.rateLimiter.throttleWithJitter();
-    logger.info('Scraping product details', { productId });
-
-    try {
-      await this.page!.goto(`${config.alkoBaseUrl}/tuotteet/${productId}`, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
-      await this.page!.waitForTimeout(2000);
-
-      const enriched = (await this.page!.evaluate(`
-        (() => {
-          const result = {
-            tasteProfile: null,
-            usageTips: null,
-            servingSuggestion: null,
-            foodPairings: [],
-            certificates: [],
-            ingredients: null,
-            smokiness: null,
-            smokinessLabel: null,
-          };
-
-          const bodyText = document.body.innerText || '';
-
-          // Taste profile is the short descriptor line beneath the product
-          // name. Heuristic: look for one of the colour/body lead-in words.
-          const tasteMatch = bodyText.match(/^[^\\n]*?((?:Punainen|Valkoinen|Rosee|Kullanvärinen|Meripihkan|Kirkas|Tumma|Vaalea|Vaaleanruskea|Täyteläinen|Keskitäyteläinen|Kevyt|Kuiva|Makea|Puolimakea)[^\\n]{10,200})/m);
-          if (tasteMatch) result.tasteProfile = tasteMatch[1].trim();
-
-          const vinkkiMatch = bodyText.match(/KÄYTTÖVINKIT\\s*([^]*?)(?=TARJOILU|Tuotteen mahdollisesti|$)/i);
-          if (vinkkiMatch) result.usageTips = vinkkiMatch[1].trim().substring(0, 500);
-
-          const tarjoiluMatch = bodyText.match(/TARJOILU\\s*([^]*?)(?=Tuotteen mahdollisesti|Alko Oy|$)/i);
-          if (tarjoiluMatch) result.servingSuggestion = tarjoiluMatch[1].trim().substring(0, 500);
-
-          const ingredientsMatch = bodyText.match(/TUOTTAJAN ILMOITTAMAT AINESOSAT\\n([^]*?)(?=\\n[A-ZÄÖÅÜ][A-ZÄÖÅÜ\\/\\s]{2,}\\n|$)/);
-          if (ingredientsMatch) result.ingredients = ingredientsMatch[1].trim().substring(0, 1000);
-
-          // Whiskey-specific smokiness widget: .smokiness-icon.smokey count
-          const smokinessContainer = document.querySelector('.smokiness');
-          if (smokinessContainer) {
-            const labelEl = smokinessContainer.querySelector('.smokiness-label');
-            if (labelEl) result.smokinessLabel = labelEl.textContent?.trim() || null;
-            const smokeyIcons = smokinessContainer.querySelectorAll('.smokiness-icon.smokey');
-            result.smokiness = smokeyIcons.length;
-          }
-
-          // Certificates have .ecological.certificate class
-          const seenCerts = new Set();
-          document.querySelectorAll('.ecological.certificate.link-tooltip[aria-label]').forEach((el) => {
-            const aria = el.getAttribute('aria-label');
-            if (aria && !seenCerts.has(aria)) {
-              seenCerts.add(aria);
-              result.certificates.push(aria);
-            }
-          });
-
-          // Food pairings: pdp-symbol-link anchors without the certificate class
-          const seenPairings = new Set();
-          document.querySelectorAll('a.pdp-symbol-link[aria-label]:not(.ecological.certificate)').forEach((el) => {
-            const aria = el.getAttribute('aria-label');
-            if (aria && !seenPairings.has(aria)) {
-              seenPairings.add(aria);
-              result.foodPairings.push(aria);
-            }
-          });
-
-          return result;
-        })()
-      `)) as EnrichedProductData;
-
-      this.backoff.reset();
-      logger.info('Product details scraped', {
-        productId,
-        hasTaste: !!enriched.tasteProfile,
-        hasTips: !!enriched.usageTips,
-        hasServing: !!enriched.servingSuggestion,
-        hasIngredients: !!enriched.ingredients,
-        pairings: enriched.foodPairings.length,
-        certificates: enriched.certificates.length,
-        smokiness: enriched.smokiness,
-      });
-      return enriched;
-    } catch (err) {
-      logger.error('Product details scrape failed', { productId, err: String(err) });
-      await this.backoff.wait();
-      if (this.backoff.attempts > 3) {
-        this.sessionEstablished = false;
-      }
-      return null;
     }
   }
 

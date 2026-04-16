@@ -56,7 +56,7 @@ alko availability 000001 --city Helsinki
 | ------------------------------- | ----------------------------------------------------------------------------------- |
 | `alko update`                   | Refresh the product catalog from alko.fi's product JSON API (via Playwright).       |
 | `alko list` (alias `search`)    | Filter and browse products from the local catalog.                                  |
-| `alko show <productId>`         | Print a single product's details, optionally enriched from alko.fi.                 |
+| `alko show <productId>`         | Print a single product's details from the local catalog.                            |
 | `alko availability <productId>` | Check per-store stock in real time (scrapes alko.fi).                               |
 | `alko stores`                   | List stores in the local catalog (optionally filter by city).                       |
 | `alko status`                   | Show DB path, schema version, catalog size and last-sync info.                      |
@@ -93,7 +93,7 @@ alko list --query "syrah" --limit 50 --json | jq '.products[].name'
 
 Filter flags: `--query`, `--type`, `--country`, `--region`, `--min-price`,
 `--max-price`, `--min-alcohol`, `--max-alcohol`, `--assortment`,
-`--beer-type`, `--min-smokiness`, `--max-smokiness`.
+`--beer-type`.
 Sort with `--sort name|price|alcohol|pricePerLiter`
 and `--order asc|desc`. Use `--limit N` to cap the result count; the
 default returns every match (pipe to `head` / `less` for ad hoc trimming).
@@ -102,19 +102,15 @@ default returns every match (pipe to `head` / `less` for ad hoc trimming).
 
 ```bash
 alko show 000001
-alko show 000001 --enrich        # Also scrape taste/pairings/certificates
 alko show 000001 --json | jq '.producer'
 ```
-
-`--enrich` scrapes the product page for taste profile, serving tips,
-food pairings, certificates and (for whiskies) smokiness, then persists
-them to the local catalog so future lookups are free.
 
 ### `alko availability`
 
 ```bash
 alko availability 000001
 alko availability 000001 --city Helsinki
+alko availability 000001 --store 2137
 alko availability 000001 --json | jq '.stores[].storeName'
 ```
 
@@ -142,8 +138,8 @@ Environment variables:
 
 | Variable                   | Purpose                                                         | Default                                                                                             |
 | -------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `ALKO_DB_PATH`             | Override the SQLite file location (great for tests).            | `$XDG_DATA_HOME/alko-cli/alko.db` or `~/.config/alko-cli/alko.db`                                  |
-| `XDG_DATA_HOME`            | Base directory for the catalog.                                 | `~/.config`                                                                                         |
+| `ALKO_DB_PATH`             | Override the SQLite file location (great for tests).            | `~/.alko-cli/alko.db` (or `$XDG_DATA_HOME/alko-cli/alko.db` when `XDG_DATA_HOME` is set)            |
+| `XDG_DATA_HOME`            | When set, opts into the XDG layout under `$XDG_DATA_HOME/alko-cli/`. | unset                                                                                          |
 | `ALKO_BASE_URL`            | Base URL used by the scraper.                                   | `https://www.alko.fi`                                                                               |
 | `ALKO_UPDATE_STALENESS_MS` | How old `last_sync` can be before `alko update` actually runs.  | 24 h                                                                                                |
 | `SCRAPE_RATE_LIMIT_MS`     | Minimum interval between scraper requests.                      | 2000                                                                                                |
@@ -151,10 +147,18 @@ Environment variables:
 
 ## Data layout
 
+By default everything alko-cli owns lives under `~/.alko-cli/`:
+
 ```
-$XDG_DATA_HOME/alko-cli/alko.db      # SQLite database (WAL journal)
-$XDG_DATA_HOME/alko-cli/alko.db-wal  # Write-ahead log, managed by SQLite
+~/.alko-cli/alko.db      # SQLite database (WAL journal)
+~/.alko-cli/alko.db-wal  # Write-ahead log, managed by SQLite
+~/.alko-cli/alko.db-shm  # Shared-memory file, managed by SQLite
 ```
+
+Setting `XDG_DATA_HOME` relocates the directory to
+`$XDG_DATA_HOME/alko-cli/`. Setting `ALKO_DB_PATH` overrides the DB file
+location entirely (useful for tests or when you want the DB outside
+`$HOME`).
 
 ## Development
 

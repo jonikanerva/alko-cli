@@ -99,18 +99,6 @@ export interface Product {
   description: string | null;
   notes: string | null;
 
-  // Enriched data (scraped from product page)
-  tasteProfile: string | null;
-  usageTips: string | null;
-  servingSuggestion: string | null;
-  foodPairings: string[] | null;
-  certificates: string[] | null;
-  ingredients: string | null;
-
-  // Whiskey-specific enriched data
-  smokiness: number | null;
-  smokinessLabel: string | null;
-
   // Technical specs
   alcoholPercentage: number;
   acids: number | null;
@@ -131,8 +119,6 @@ export interface Product {
   createdAt: string;
 }
 
-export type SmokinessLevel = 0 | 1 | 2 | 3 | 4;
-
 /**
  * Product search filters.
  *
@@ -152,8 +138,6 @@ export interface ProductSearchFilters {
   maxAlcohol?: number;
   assortment?: string;
   beerType?: string;
-  minSmokiness?: SmokinessLevel;
-  maxSmokiness?: SmokinessLevel;
 }
 
 export interface ProductSearchOptions {

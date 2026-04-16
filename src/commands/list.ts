@@ -3,7 +3,7 @@ import { SqliteService } from '../db/sqlite.js';
 import { getDbPath } from '../utils/paths.js';
 import { detectFormat, formatJson, formatProductsTable } from '../utils/formatter.js';
 import { parsePositiveInt, parseSortOrder } from '../utils/cli-parse.js';
-import type { ProductSearchFilters, ProductSearchOptions, SmokinessLevel } from '../types/product.js';
+import type { ProductSearchFilters, ProductSearchOptions } from '../types/product.js';
 
 interface ListOptions {
   query?: string;
@@ -16,8 +16,6 @@ interface ListOptions {
   maxAlcohol?: string;
   assortment?: string;
   beerType?: string;
-  minSmokiness?: string;
-  maxSmokiness?: string;
   sort?: string;
   order?: string;
   limit?: string;
@@ -32,15 +30,6 @@ function parseNumber(raw: string | undefined, field: string): number | undefined
     throw new Error(`Invalid number for --${field}: ${raw}`);
   }
   return n;
-}
-
-function parseSmokiness(raw: string | undefined, field: string): SmokinessLevel | undefined {
-  const n = parseNumber(raw, field);
-  if (n === undefined) return undefined;
-  if (!Number.isInteger(n) || n < 0 || n > 4) {
-    throw new Error(`--${field} must be an integer in [0,4], got ${raw}`);
-  }
-  return n as SmokinessLevel;
 }
 
 export function registerListCommand(program: Command): void {
@@ -58,8 +47,6 @@ export function registerListCommand(program: Command): void {
     .option('--max-alcohol <pct>', 'Maximum alcohol percentage')
     .option('--assortment <name>', 'vakiovalikoima|tilausvalikoima|erikoiserä|kausituote')
     .option('--beer-type <name>', 'Beer type (ipa, lager, stout & porter, ...)')
-    .option('--min-smokiness <0-4>', 'Whiskey smokiness lower bound')
-    .option('--max-smokiness <0-4>', 'Whiskey smokiness upper bound')
     .option(
       '--sort <field>',
       'Sort by: name|price|alcohol|pricePerLiter (default: relevance when --query is given, else name)'
@@ -86,8 +73,6 @@ export function registerListCommand(program: Command): void {
           maxAlcohol: parseNumber(opts.maxAlcohol, 'max-alcohol'),
           assortment: opts.assortment,
           beerType: opts.beerType,
-          minSmokiness: parseSmokiness(opts.minSmokiness, 'min-smokiness'),
-          maxSmokiness: parseSmokiness(opts.maxSmokiness, 'max-smokiness'),
         };
 
         const sortBy = (['price', 'name', 'alcohol', 'pricePerLiter'] as const).find(

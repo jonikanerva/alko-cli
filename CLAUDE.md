@@ -15,7 +15,7 @@ alko-cli/
 │   ├── commands/
 │   │   ├── update.ts            # alko update (sync via Playwright + JSON API)
 │   │   ├── list.ts              # alko list / search (filtered catalog)
-│   │   ├── show.ts              # alko show [--enrich]
+│   │   ├── show.ts              # alko show
 │   │   ├── availability.ts      # alko availability (real-time stock)
 │   │   ├── stores.ts            # alko stores (list from DB)
 │   │   └── status.ts            # alko status (catalog metadata)
@@ -24,7 +24,7 @@ alko-cli/
 │   │   ├── product-mapper.ts    # Pure mapper: AlkoApiProduct → Product
 │   │   ├── store-sync.ts        # listStores → mapAlkoApiStore → upsert
 │   │   ├── store-mapper.ts      # Pure mapper: AlkoApiStore → Store
-│   │   └── scraper.ts           # Playwright scraper (listProducts + listStores + availability + enrich)
+│   │   └── scraper.ts           # Playwright scraper (listProducts + listStores + availability)
 │   ├── db/
 │   │   ├── schema.ts            # SQL DDL + FTS5 virtual table
 │   │   └── sqlite.ts            # SqliteService (node:sqlite)
@@ -32,7 +32,7 @@ alko-cli/
 │   └── utils/
 │       ├── formatter.ts         # Table / JSON output helpers (isTTY autodetect)
 │       ├── logger.ts            # Stderr-only leveled logger
-│       ├── paths.ts             # DB path resolution (XDG-aware, ALKO_DB_PATH)
+│       ├── paths.ts             # DB path resolution (~/.alko-cli by default, XDG_DATA_HOME opt-in, ALKO_DB_PATH override)
 │       └── rate-limiter.ts      # Scraper throttling + exponential backoff
 ├── tests/
 │   ├── helpers/seed-db.ts       # Seed temp SQLite for integration tests
@@ -261,5 +261,4 @@ npm run test:all             # typecheck + lint + test:run + build
   mappers accordingly.
 - **Fields the API does not expose** (producer, EAN, region, vintage as
   a column, acids, sugar, energy, EBC, EBU) are stored as empty / null
-  in the catalog. `alko show --enrich` can fill some of these from the
-  product detail page when needed.
+  in the catalog.

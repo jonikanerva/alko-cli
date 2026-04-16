@@ -123,13 +123,9 @@ describe('mapAlkoApiProduct', () => {
     expect(mapAlkoApiProduct(raw({ name: 'Sauvignon Blanc' }))?.vintage).toBeNull();
   });
 
-  it('trims taste into description (but leaves tasteProfile untouched)', () => {
-    // tasteProfile is an enrichment-only column populated by `alko show
-    // --enrich`; the API-side sync must not claim ownership of it, so the
-    // mapper returns null and the UPDATE path ignores it on resync.
+  it('trims taste into description', () => {
     const p = mapAlkoApiProduct(raw({ taste: '  Runsaanpunainen, täyteläinen  ' }));
     expect(p?.description).toBe('Runsaanpunainen, täyteläinen');
-    expect(p?.tasteProfile).toBeNull();
   });
 
   it('leaves price-per-liter at 0 when volume is 0 or missing', () => {

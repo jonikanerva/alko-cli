@@ -158,7 +158,7 @@ describe('alko CLI end-to-end', () => {
     const out = runCli(['status', '--json'], { ALKO_DB_PATH: dbPath });
     const status = JSON.parse(out.trim());
     expect(status.products.count).toBe(4);
-    expect(status.schemaVersion).toBe('1');
+    expect(status.schemaVersion).toBe('2');
     expect(status.products.lastSync).toBeTruthy();
   });
 
@@ -215,10 +215,10 @@ describe('alko CLI end-to-end', () => {
 
   it('re-upserting an API-style payload preserves API-unowned fields', () => {
     // Simulates the real-world flow: catalog was seeded with full data
-    // (producer, region, specialGroup, isNew, tasteProfile from --enrich),
-    // then `alko update` runs a resync where the Alko search API does NOT
-    // expose those columns. The mapper returns empty/null defaults for
-    // them, but the DB UPDATE path must keep the existing values.
+    // (producer, region, specialGroup, isNew), then `alko update` runs
+    // a resync where the Alko search API does NOT expose those columns.
+    // The mapper returns empty/null defaults for them, but the DB UPDATE
+    // path must keep the existing values.
     const preserveDb = join(tmpDir, 'preserve.db');
     const original = makeProduct({
       id: '111111',
@@ -229,7 +229,6 @@ describe('alko CLI end-to-end', () => {
       specialGroup: 'Luomu',
       isNew: true,
       price: 10,
-      tasteProfile: 'Original enrichment taste profile',
     });
     seedTestCatalog(preserveDb, [original]);
 
@@ -245,7 +244,6 @@ describe('alko CLI end-to-end', () => {
       region: null,
       specialGroup: null,
       isNew: false,
-      tasteProfile: null,
     });
     seedTestCatalog(preserveDb, [apiResync]);
 
@@ -264,6 +262,5 @@ describe('alko CLI end-to-end', () => {
     expect(product.region).toBe('Bordeaux');
     expect(product.specialGroup).toBe('Luomu');
     expect(product.isNew).toBe(true);
-    expect(product.tasteProfile).toBe('Original enrichment taste profile');
   });
 });

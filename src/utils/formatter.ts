@@ -123,7 +123,7 @@ export function formatProductsTable(result: ProductSearchResult): string {
 /**
  * Render a single product as a multi-line "key: value" block.
  */
-export function formatProductDetail(p: Product): string {
+export function formatProductDetail(p: Product, url?: string): string {
   const lines: string[] = [];
   const add = (k: string, v: unknown) => {
     if (v === null || v === undefined || v === '') return;
@@ -150,20 +150,14 @@ export function formatProductDetail(p: Product): string {
   add('Acids g/L', p.acids);
   add('Sugar g/L', p.sugar);
   add('Energy', p.energy);
-  add('Smokiness', p.smokiness !== null ? `${p.smokiness} (${p.smokinessLabel ?? ''})` : null);
   add('Special group', p.specialGroup);
   add('Assortment', p.assortment);
   add('New', p.isNew ? 'yes' : null);
   add('EAN', p.ean);
   add('Description', p.description);
   add('Notes', p.notes);
-  add('Taste profile', p.tasteProfile);
-  add('Usage tips', p.usageTips);
-  add('Serving', p.servingSuggestion);
-  add('Food pairings', p.foodPairings);
-  add('Certificates', p.certificates);
-  add('Ingredients', p.ingredients);
   add('Updated', p.updatedAt);
+  add('URL', url);
 
   return lines.join('\n') + '\n';
 }
